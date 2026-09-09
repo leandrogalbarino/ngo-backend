@@ -1,9 +1,10 @@
 from django.db import transaction
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
+from rest_framework.relations import PrimaryKeyRelatedField
 
 from despesas.models import *
-from entidades.serializers import PessoaSerializer, UnidadeField, PessoaField, UnidadeSerializer
+from entidades.serializers import UnidadeField, PessoaField
 from usuarios.serializers import UserDetailsSerializer
 
 
@@ -29,68 +30,45 @@ class ValorDocumentoSerializer(serializers.ModelSerializer):
                   "descricao"]
         read_only_fields = ["id_valor_documento"]
 
-
+#OK
 class GrupoFinalidadeSerializer(serializers.ModelSerializer):
     class Meta:
         model = GrupoFinalidade
         fields = ["id_grupo_finalidade", "grupo_finalidade", "ativo"]
         read_only_fields = ["id_grupo_finalidade"]
-        extra_kwargs = {
-            "ativo": {"write_only": True},
-        }
 
-
+#OK
 class NaturezaFinalidadeSerializer(serializers.ModelSerializer):
     class Meta:
         model = NaturezaFinalidade
         fields = ["id_natureza_finalidade", "natureza_finalidade", "ativo"]
         read_only_fields = ["id_natureza_finalidade"]
-        extra_kwargs = {
-            "ativo": {"write_only": True},
-        }
 
-
-class TipoDocumentoField(serializers.RelatedField):
-
-    def to_representation(self, value):
-        return TipoDocumentoSerializer(value).data
-
-    def to_internal_value(self, data):
-        try:
-            if not isinstance(data, int):
-                raise ValidationError('O ID do tipo de documento deve ser um número inteiro.')
-            instance = TipoDocumento.objects.get(pk=data)
-            return instance.pk
-        except TipoDocumento.DoesNotExist:
-            raise ValidationError('Não existe nenhum tipo de documento com este ID.')
-
-
+#OK
 class TipoDocumentoParaFinalidadeSerializer(serializers.ModelSerializer):
-    tipo_documento = TipoDocumentoField(queryset=TipoDocumento.objects.filter(ativo=True))
+    tipo_documento = serializers.StringRelatedField(read_only=True)
+    id_tipo_documento = PrimaryKeyRelatedField(queryset=TipoDocumento.objects.all(), source="tipo_documento")
 
     class Meta:
         model = TipoDocumentoParaFinalidade
-        fields = ["tipo_documento", "obrigatorio"]
+        fields = ["id_tipo_documento", "tipo_documento", "obrigatorio"]
 
-    def validate_tipo_documento(self, value):
+    def validate_id_tipo_documento(self, value):
         if not value.ativo:
             raise serializers.ValidationError(
-                f"O tipo de documento '{value.tipo_documento}' não está ativo."
+                f"O tipo de documento '{value}' não está ativo(a)."
             )
         return value
 
-
-class GrupoFinalidadeField(serializers.PrimaryKeyRelatedField):
-    def to_representation(self, value):
-        return GrupoFinalidadeSerializer(value).data
-
-class NaturezaFinalidadeField(serializers.PrimaryKeyRelatedField):
-    def to_representation(self, value):
-        return NaturezaFinalidadeSerializer(value).data
-
+#OK
 class FinalidadeSerializer(serializers.ModelSerializer):
-    natureza_finalidade = NaturezaFinalidadeField(queryset=NaturezaFinalidade.objects.all())
-    grupo_finalidade = GrupoFinalidadeField(queryset=GrupoFinalidade.objects.all())
+    id_natureza_finalidade = PrimaryKeyRelatedField(queryset=NaturezaFinalidade.objects.all(), write_only=True,
+                                                    source="natureza_finalidade")
+    id_grupo_finalidade = PrimaryKeyRelatedField(queryset=GrupoFinalidade.objects.all(), write_only=True,
+                                                 source="grupo_finalidade")
+    natureza_finalidade = serializers.StringRelatedField(read_only=True)
+    grupo_finalidade = serializers.StringRelatedField(read_only=True)
+
 
     tipos_documentos = TipoDocumentoParaFinalidadeSerializer(
         source="tipodocumentoparafinalidade_set", many=True)
@@ -101,24 +79,28 @@ class FinalidadeSerializer(serializers.ModelSerializer):
             "id_finalidade",
             "natureza_finalidade",
             "grupo_finalidade",
+            "id_natureza_finalidade",
+            "id_grupo_finalidade",
             "finalidade",
-            "tipos_documentos"
+            "tipos_documentos",
+            "ativo"
         ]
 
         read_only_fields = ["id_finalidade"]
 
-    def validate_tipos_documentos(self, data):
-        list_id_tipos_documentos = []
-        for tipo_doc in data:
-            list_id_tipos_documentos.append(tipo_doc['tipo_documento'])
+    def validate_id_natureza_finalidade(self, natureza):
+        if not natureza.ativo:
+            raise serializers.ValidationError(f"A natureza de finalidade '{natureza}' não está ativo(a).")
+        return natureza
 
-        if len(list_id_tipos_documentos) > len(set(list_id_tipos_documentos)):
-            raise serializers.ValidationError("Os ids de documentos devem ser únicos")
-        return data
+    def validate_id_grupo_finalidade(self, grupo):
+        if not grupo.ativo:
+            raise serializers.ValidationError(f"A natureza de finalidade '{grupo}' não está ativo(a).")
+        return grupo
+
 
     def create(self, validated_data):
         tipos_documentos = validated_data.pop("tipodocumentoparafinalidade_set", [])
-
         with transaction.atomic():
             finalidade = Finalidade.objects.create(**validated_data)
             relations = [
@@ -137,15 +119,15 @@ class FinalidadeSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         tipos_documentos = validated_data.pop("tipodocumentoparafinalidade_set", [])
-
         instance = super().update(instance, validated_data)
+
+        tipos_documentos = [i for i in tipos_documentos if 'tipo_documento' in i]
 
         for item in tipos_documentos:
             item_registered = False
             for tipo_registered in instance.tipodocumentoparafinalidade_set.all():
-                if item['tipo_documento'].id_tipo_documento == tipo_registered.tipo_documento.id_tipo_documento:
+                if item['tipo_documento'].pk == tipo_registered.tipo_documento.id_tipo_documento:
                     tipo_registered.obrigatorio = item.get('obrigatorio', True)
-                    # tipo_registered.ativo = item.get('obrigatorio', tipo_registered.ativo)
                     tipo_registered.save()
                     item_registered = True
                     break
@@ -157,14 +139,14 @@ class FinalidadeSerializer(serializers.ModelSerializer):
                 )
         return instance
 
-
 # OK
 class ValorDocumentosNestedSerializer(serializers.ModelSerializer):
-    tipo_documento = TipoDocumentoField(queryset=TipoDocumento.objects.all())
+    tipo_documento = TipoDocumentoSerializer(read_only=True)
+    id_documento = PrimaryKeyRelatedField(queryset=TipoDocumento.objects.all(), source="tipo_documento")
 
     class Meta:
         model = ValorDocumento
-        exclude = ["tipo_documento", "valor_documento", "versao_transacao"]
+        exclude = ["id_tipo_documento","tipo_documento", "valor_documento", "versao_transacao"]
         extra_kwargs = {
             "versao_transacao": {"write_only": True}
         }
@@ -173,6 +155,7 @@ class ValorDocumentosNestedSerializer(serializers.ModelSerializer):
 class FinalidadeField(serializers.PrimaryKeyRelatedField):
     def to_representation(self, value):
         FinalidadeSerializer(value).data
+
 
 class StatusTransacaoSerializer(serializers.ModelSerializer):
     class Meta:
@@ -193,7 +176,7 @@ class TransacaoReadSerializer(serializers.ModelSerializer):
 
 
 class VersaoTransacaoSerializer(serializers.ModelSerializer):
-    #documentos = ValorDocumentosNestedSerializer(many=True, required=False, allow_empty=True)
+    # documentos = ValorDocumentosNestedSerializer(many=True, required=False, allow_empty=True)
 
     # finalidade = FinalidadeSerializer(required=False, allow_null=True)
     # unidade_credora = UnidadeSerializer(required=False)
@@ -325,21 +308,7 @@ class TransacaoSerializer(serializers.ModelSerializer):
                 transacao.versao_transacao = versao_transacao_instance
                 transacao.save()
 
-
         return transacao
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     # class EmpenhoSerializer(serializers.ModelSerializer):
     #     transacoes = TransacaoSerializer(many=True, read_only=True)
