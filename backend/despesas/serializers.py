@@ -11,40 +11,41 @@ from usuarios.serializers import UserDetailsSerializer
 class TipoDocumentoSerializer(serializers.ModelSerializer):
     class Meta:
         model = TipoDocumento
-        fields = ["id_tipo_documento", "tipo_documento"]
+        fields = ["id_tipo_documento", "tipo_documento", "ativo"]
         read_only_fields = ["id_tipo_documento"]
 
 
 class ValorDocumentoSerializer(serializers.ModelSerializer):
-    tipo_documento = TipoDocumentoSerializer(read_only=True)
-
     id_tipo_documento = serializers.PrimaryKeyRelatedField(
         queryset=TipoDocumento.objects.all(),
-        source="tipo_documento",  # Aponta para o atributo do modelo Django
-        write_only=True
+        source="tipo_documento"
     )
+    tipo_documento = TipoDocumentoSerializer(read_only=True)
+    id_versao_transacao = serializers.PrimaryKeyRelatedField(queryset=VersaoTransacao.objects.all(),
+                                                          source="versao_transacao")
 
     class Meta:
         model = ValorDocumento
-        fields = ["id_valor_documento", "id_tipo_documento", "tipo_documento", "valor_documento", "transacao",
-                  "descricao"]
-        read_only_fields = ["id_valor_documento"]
+        fields = ["valor_documento", "id_tipo_documento", "tipo_documento",
+                  "id_versao_transacao"]
 
-#OK
+class ValorDocumentoParaTransacaoSerializer(serializers.ModelSerializer):
+
+
 class GrupoFinalidadeSerializer(serializers.ModelSerializer):
     class Meta:
         model = GrupoFinalidade
         fields = ["id_grupo_finalidade", "grupo_finalidade", "ativo"]
         read_only_fields = ["id_grupo_finalidade"]
 
-#OK
+
 class NaturezaFinalidadeSerializer(serializers.ModelSerializer):
     class Meta:
         model = NaturezaFinalidade
         fields = ["id_natureza_finalidade", "natureza_finalidade", "ativo"]
         read_only_fields = ["id_natureza_finalidade"]
 
-#OK
+
 class TipoDocumentoParaFinalidadeSerializer(serializers.ModelSerializer):
     tipo_documento = serializers.StringRelatedField(read_only=True)
     id_tipo_documento = PrimaryKeyRelatedField(queryset=TipoDocumento.objects.all(), source="tipo_documento")
@@ -60,7 +61,7 @@ class TipoDocumentoParaFinalidadeSerializer(serializers.ModelSerializer):
             )
         return value
 
-#OK
+
 class FinalidadeSerializer(serializers.ModelSerializer):
     id_natureza_finalidade = PrimaryKeyRelatedField(queryset=NaturezaFinalidade.objects.all(), write_only=True,
                                                     source="natureza_finalidade")
@@ -68,7 +69,6 @@ class FinalidadeSerializer(serializers.ModelSerializer):
                                                  source="grupo_finalidade")
     natureza_finalidade = serializers.StringRelatedField(read_only=True)
     grupo_finalidade = serializers.StringRelatedField(read_only=True)
-
 
     tipos_documentos = TipoDocumentoParaFinalidadeSerializer(
         source="tipodocumentoparafinalidade_set", many=True)
@@ -97,7 +97,6 @@ class FinalidadeSerializer(serializers.ModelSerializer):
         if not grupo.ativo:
             raise serializers.ValidationError(f"A natureza de finalidade '{grupo}' não está ativo(a).")
         return grupo
-
 
     def create(self, validated_data):
         tipos_documentos = validated_data.pop("tipodocumentoparafinalidade_set", [])
@@ -139,6 +138,7 @@ class FinalidadeSerializer(serializers.ModelSerializer):
                 )
         return instance
 
+
 # OK
 class ValorDocumentosNestedSerializer(serializers.ModelSerializer):
     tipo_documento = TipoDocumentoSerializer(read_only=True)
@@ -146,7 +146,7 @@ class ValorDocumentosNestedSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ValorDocumento
-        exclude = ["id_tipo_documento","tipo_documento", "valor_documento", "versao_transacao"]
+        exclude = ["id_tipo_documento", "tipo_documento", "valor_documento", "versao_transacao"]
         extra_kwargs = {
             "versao_transacao": {"write_only": True}
         }

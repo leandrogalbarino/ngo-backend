@@ -2,8 +2,9 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 
 from despesas.views.finalidades import FinalidadeViewSet, NaturezaFinalidadeViewSet, GrupoFinalidadeViewSet
-from despesas.views.documentos import TipoDocumentoViewSet, DocumentoViewSet
+from despesas.views.documentos import TipoDocumentoViewSet, ValorDocumentoViewSet
 from despesas.views.transacoes import TransacoesViewSet, StatusTransacaoViewSet
+from rest_framework_nested import routers
 
 app_name = "despesas"
 
@@ -15,9 +16,11 @@ router.register("finalidades/naturezas", NaturezaFinalidadeViewSet, basename="na
 router.register("finalidades/grupos", GrupoFinalidadeViewSet, basename="grupos_finalidades")
 router.register("finalidades", FinalidadeViewSet, basename="finalidades")
 router.register("documentos/tipos", TipoDocumentoViewSet, basename="tipos_documentos")
-router.register("documentos", DocumentoViewSet, basename="documentos")
-router.register("transacoes/status", StatusTransacaoViewSet, basename="status_transacoes")
-router.register("transacoes", TransacoesViewSet, basename="transacoes")
+
+router.register("transacoes", TransacoesViewSet, basename="transacoes") #!OK
+transacao_router = routers.NestedSimpleRouter(router, r'transacoes', lookup='transacao')
+transacao_router.register(r'documentos', ValorDocumentoViewSet, basename='transacao-documentos')
+
 
 
 

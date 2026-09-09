@@ -1,13 +1,14 @@
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework.filters import SearchFilter, OrderingFilter
+from rest_framework.filters import OrderingFilter
 from rest_framework.viewsets import ModelViewSet
 
 from despesas.filters import FinalidadeFilterSet, GrupoFinalidadeFilterSet, NaturezaFinalidadeFilterSet
 from despesas.models import NaturezaFinalidade, GrupoFinalidade, Finalidade
 from despesas.serializers import NaturezaFinalidadeSerializer, FinalidadeSerializer, GrupoFinalidadeSerializer
+from despesas.views.ativoUtil import AtivoListDefaultMixin
 
 
-class NaturezaFinalidadeViewSet(ModelViewSet):
+class NaturezaFinalidadeViewSet(AtivoListDefaultMixin, ModelViewSet):
     queryset = NaturezaFinalidade.objects.all()
     http_method_names = ['get', 'post', 'patch', 'delete']
     ordering_fields = ['id_natureza_finalidade','natureza_finalidade']
@@ -15,12 +16,8 @@ class NaturezaFinalidadeViewSet(ModelViewSet):
     serializer_class = NaturezaFinalidadeSerializer
     filterset_class = NaturezaFinalidadeFilterSet
 
-    def perform_destroy(self, instance):
-        instance.ativo = False
-        instance.save()
 
-
-class GrupoFinalidadeViewSet(ModelViewSet):
+class GrupoFinalidadeViewSet(AtivoListDefaultMixin, ModelViewSet):
     queryset = GrupoFinalidade.objects.all()
     http_method_names = ['get', 'post', 'patch', 'delete']
     ordering_fields = ['id_grupo_finalidade','grupo_finalidade']
@@ -28,12 +25,8 @@ class GrupoFinalidadeViewSet(ModelViewSet):
     serializer_class = GrupoFinalidadeSerializer
     filterset_class = GrupoFinalidadeFilterSet
 
-    def perform_destroy(self, instance):
-        instance.ativo = False
-        instance.save()
 
-
-class FinalidadeViewSet(ModelViewSet):
+class FinalidadeViewSet(AtivoListDefaultMixin, ModelViewSet):
     queryset = Finalidade.objects.all().select_related("natureza_finalidade", "grupo_finalidade").prefetch_related(
         "tipodocumentoparafinalidade_set")
     http_method_names = ['get', 'post', 'patch', 'delete']
@@ -41,7 +34,3 @@ class FinalidadeViewSet(ModelViewSet):
     filter_backends = (DjangoFilterBackend, OrderingFilter)
     serializer_class = FinalidadeSerializer
     filterset_class = FinalidadeFilterSet
-
-    def perform_destroy(self, instance):
-        instance.ativo = False
-        instance.save()
