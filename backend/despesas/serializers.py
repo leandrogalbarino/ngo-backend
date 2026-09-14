@@ -16,7 +16,6 @@ class ValorDocumentoSerializer(serializers.ModelSerializer):
     id_tipo_documento = serializers.PrimaryKeyRelatedField(
         queryset=TipoDocumento.objects.all(),
         source="tipo_documento",
-        write_only=True
     )
     tipo_documento = serializers.StringRelatedField(read_only=True)
 

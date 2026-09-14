@@ -33,4 +33,5 @@ class VersoesTransacaoViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         transacao_id = self.kwargs.get('transacao_pk')
+
         return VersaoTransacao.objects.filter(transacao=transacao_id)
