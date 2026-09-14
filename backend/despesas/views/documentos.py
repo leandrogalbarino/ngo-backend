@@ -19,3 +19,8 @@ class ValorDocumentoViewSet(viewsets.ModelViewSet):
     queryset = ValorDocumento.objects.all()
     serializer_class = ValorDocumentoSerializer
     http_method_names = ['get', 'patch', 'post', 'delete']
+
+    def get_queryset(self):
+        id_transacao = self.kwargs['transacao_pk']
+        print(id_transacao)
+        return ValorDocumento.objects.filter(versao_transacao=id_transacao)

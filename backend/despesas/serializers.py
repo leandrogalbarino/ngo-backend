@@ -217,13 +217,13 @@ class VersaoTransacaoSerializer(serializers.ModelSerializer):
             else:
                 validation_errors.append({
                     "id_tipo_documento": doc,
-                    "error": "Não é possível enviar dois documentos do mesmo tipo."
+                    "error": "Não é possível enviar mais de um documento do mesmo tipo."
                 })
 
-        if len(validation_errors) > 0:
-            raise serializers.ValidationError({'documentos': validation_errors})
 
         if not finalidade:
+            if validation_errors:
+                raise serializers.ValidationError({'documentos': validation_errors})
             return data
 
         tipos_documentos_possiveis = finalidade.tipodocumentoparafinalidade_set.select_related('tipo_documento').all()

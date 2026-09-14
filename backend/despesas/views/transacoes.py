@@ -1,6 +1,7 @@
+from astroid.brain.brain_six import transform_six_add_metaclass
 from rest_framework import viewsets
-from despesas.models import Transacao, StatusTransacao
-from despesas.serializers import TransacaoSerializer, StatusTransacaoSerializer
+from despesas.models import Transacao, StatusTransacao, VersaoTransacao
+from despesas.serializers import TransacaoSerializer, StatusTransacaoSerializer, VersaoTransacaoSerializer
 
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import OrderingFilter
@@ -19,3 +20,17 @@ class StatusTransacaoViewSet(viewsets.ModelViewSet):
     queryset = StatusTransacao.objects.all()
     serializer_class = StatusTransacaoSerializer
     http_method_names = ['get']
+
+class VersoesTransacaoViewSet(viewsets.ModelViewSet):
+    queryset = VersaoTransacao.objects.all()
+    serializer_class = VersaoTransacaoSerializer
+    http_method_names = ['get']
+    filter_backends = (DjangoFilterBackend, OrderingFilter)
+
+    ordering_fields = ['numero_versao', 'data_criacao']
+    ordering=['-numero_versao']
+    filterset_fields = ['numero_versao', 'data_criacao']
+
+    def get_queryset(self):
+        transacao_id = self.kwargs.get('transacao_pk')
+        return VersaoTransacao.objects.filter(transacao=transacao_id)
