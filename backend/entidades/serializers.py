@@ -12,11 +12,13 @@ class CentroSerializer(serializers.ModelSerializer):
         fields = ["id_centro_interno", "nome_centro", "sigla_centro", "cod_estruturado"]
         read_only = ["id_centro_interno"]
 
+
 class SituacaoUnidadeSerializer(serializers.ModelSerializer):
     class Meta:
         model = SituacaoUnidade
         fields = "__all__"
         extra_kwargs = {field.name: {'read_only': True} for field in SituacaoUnidade._meta.fields}
+
 
 class TipoUnidadeSerializer(serializers.ModelSerializer):
     class Meta:
@@ -24,25 +26,26 @@ class TipoUnidadeSerializer(serializers.ModelSerializer):
         fields = "__all__"
         extra_kwargs = {field.name: {'read_only': True} for field in TipoUnidade._meta.fields}
 
-class TipoUnidadeField(serializers.RelatedField):
-    def to_representation(self, value: TipoUnidade):
-        return value.tipo_unidade
 
-    def to_internal_value(self, data: TipoUnidade):
-        try:
-            return TipoUnidade.objects.get(id_tipo_unidade=data).pk
-        except TipoUnidade.DoesNotExist:
-            raise ValidationError('não existe nenhum tipo de unidade com este ID.')
-
-class SituacaoUnidadeField(serializers.RelatedField):
-    def to_representation(self, value: SituacaoUnidade):
-        return value.situacao_unidade
-
-    def to_internal_value(self, data: SituacaoUnidade):
-        try:
-            return SituacaoUnidade.objects.get(id_situacao_unidade=data).pk
-        except SituacaoUnidade.DoesNotExist:
-            raise ValidationError('Não existe nenhuma situacao de unidade com este ID.')
+# class TipoUnidadeField(serializers.RelatedField):
+#     def to_representation(self, value: TipoUnidade):
+#         return value.tipo_unidade
+#
+#     def to_internal_value(self, data: TipoUnidade):
+#         try:
+#             return TipoUnidade.objects.get(id_tipo_unidade=data).pk
+#         except TipoUnidade.DoesNotExist:
+#             raise ValidationError('não existe nenhum tipo de unidade com este ID.')
+#
+# class SituacaoUnidadeField(serializers.RelatedField):
+#     def to_representation(self, value: SituacaoUnidade):
+#         return value.situacao_unidade
+#
+#     def to_internal_value(self, data: SituacaoUnidade):
+#         try:
+#             return SituacaoUnidade.objects.get(id_situacao_unidade=data).pk
+#         except SituacaoUnidade.DoesNotExist:
+#             raise ValidationError('Não existe nenhuma situacao de unidade com este ID.')
 
 class CentroResumoSerializer(serializers.ModelSerializer):
     class Meta:
@@ -60,29 +63,38 @@ class CentroField(serializers.RelatedField):
         except Centro.DoesNotExist:
             raise ValidationError('Não existe nenhum centro com este ID.')
 
-#OK
+# OK
 class UnidadeSerializer(serializers.ModelSerializer):
-    tipo_unidade = TipoUnidadeField(queryset=TipoUnidade.objects.all())
-    situacao_unidade = SituacaoUnidadeField(queryset=SituacaoUnidade.objects.all())
-    centro = CentroField(queryset=Centro.objects.all())
+    id_tipo_unidade = serializers.PrimaryKeyRelatedField(queryset=TipoUnidade.objects.all(),source="tipo_unidade")
+    id_situacao_unidade = serializers.PrimaryKeyRelatedField(queryset=SituacaoUnidade.objects.all(), source="situacao_unidade")
+    id_centro = serializers.PrimaryKeyRelatedField(queryset=Centro.objects.all(), source="centro")
+
+    tipo_unidade = serializers.StringRelatedField(read_only=True)
+    situacao_unidade = serializers.StringRelatedField(read_only=True)
+    centro = serializers.StringRelatedField(read_only=True)
 
     class Meta:
         model = Unidade
-        fields = ["id_unidade_interna", "nome_unidade", "cod_estruturado", "centro", "tipo_unidade", "situacao_unidade"]
+        fields = ["id_unidade_interna", "nome_unidade", "cod_estruturado", "id_centro", "centro", "id_tipo_unidade",
+                  "tipo_unidade", "id_situacao_unidade", "situacao_unidade"]
         read_only = ['id_unidade_interna']
+
 
 class UnidadeField(serializers.PrimaryKeyRelatedField):
     def to_representation(self, value: Centro):
         return UnidadeSerializer(value).data
 
-# Falta arrumar o patch, talvez seja na view.
-class CursoSerializer(serializers.ModelSerializer):
-    centro = CentroField(queryset=Centro.objects.all())
 
+class CursoSerializer(serializers.ModelSerializer):
+
+    id_centro = serializers.PrimaryKeyRelatedField(queryset=Centro.objects.all(), source="centro")
+    nome_centro = serializers.RelatedField(read_only=True)
+    sigla_centro = serializers.RelatedField(read_only=True)
     class Meta:
         model = Curso
         fields = "__all__"
         extra_kwargs = {field.name: {'read_only': True} for field in Curso._meta.fields}
+
 
 class CargoSerializer(serializers.ModelSerializer):
     class Meta:
@@ -90,10 +102,12 @@ class CargoSerializer(serializers.ModelSerializer):
         fields = "__all__"
         extra_kwargs = {field.name: {'read_only': True} for field in Cargo._meta.fields}
 
+
 class TelefoneSerializer(serializers.ModelSerializer):
     class Meta:
         model = Telefone
         fields = "__all__"
+
 
 class EmailSerializer(serializers.ModelSerializer):
     class Meta:
@@ -106,18 +120,19 @@ class TelefonePessoaSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Telefone
-        fields = ['id_telefone','telefone']
+        fields = ['id_telefone', 'telefone']
+
 
 class EmailPessoaSerializer(serializers.ModelSerializer):
     id_email = serializers.IntegerField(required=False)
 
     class Meta:
         model = Email
-        fields = ['id_email','email']
+        fields = ['id_email', 'email']
 
 
-class  PessoaSerializer(serializers.ModelSerializer):
-    telefones = TelefonePessoaSerializer(many=True, source="telefone_set",required=False)
+class PessoaSerializer(serializers.ModelSerializer):
+    telefones = TelefonePessoaSerializer(many=True, source="telefone_set", required=False)
     emails = EmailPessoaSerializer(many=True, source="email_set", required=False)
 
     class Meta:
@@ -162,9 +177,10 @@ class  PessoaSerializer(serializers.ModelSerializer):
             telefone_id = telefone.pop("id_telefone", None)
 
             if telefone_id:
-                telefone = Telefone.objects.filter(pk=telefone_id,pessoa=instance).update(**telefone, pessoa=instance)
+                telefone = Telefone.objects.filter(pk=telefone_id, pessoa=instance).update(**telefone, pessoa=instance)
                 if not telefone:
-                    fields_errors['telefones'].append(f"Telefone com ID {telefone_id} não encontrado para a pessoa {instance.nome_pessoa}")
+                    fields_errors['telefones'].append(
+                        f"Telefone com ID {telefone_id} não encontrado para a pessoa {instance.nome_pessoa}")
             else:
                 Telefone.objects.create(pessoa=instance, **telefone)
 
@@ -172,9 +188,10 @@ class  PessoaSerializer(serializers.ModelSerializer):
             email_id = email.pop("id_email", None)
 
             if email_id:
-                email = Email.objects.filter(pk=email_id,pessoa=instance).update(**email, pessoa=instance)
+                email = Email.objects.filter(pk=email_id, pessoa=instance).update(**email, pessoa=instance)
                 if not email:
-                    fields_errors['emails'].append(f"Email com ID {email_id} não encontrado para a pessoa {instance.nome_pessoa}")
+                    fields_errors['emails'].append(
+                        f"Email com ID {email_id} não encontrado para a pessoa {instance.nome_pessoa}")
 
             else:
                 Email.objects.create(pessoa=instance, **email)
@@ -185,10 +202,10 @@ class  PessoaSerializer(serializers.ModelSerializer):
         instance.refresh_from_db()
         return instance
 
+
 class PessoaField(serializers.PrimaryKeyRelatedField):
     def to_representation(self, data):
         return PessoaSerializer(data).data
-
 
 
 class DiscenteSerializer(serializers.ModelSerializer):
@@ -209,4 +226,3 @@ class ServidorSerializer(serializers.ModelSerializer):
         model = Servidor
         fields = "__all__"
         extra_kwargs = {field.name: {'read_only': True} for field in Servidor._meta.fields}
-
