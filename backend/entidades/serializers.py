@@ -107,9 +107,12 @@ class CargoSerializer(serializers.ModelSerializer):
 
 
 class TelefoneSerializer(serializers.ModelSerializer):
+    id_pessoa_interna = serializers.PrimaryKeyRelatedField(queryset=Pessoa.objects.all(), source="pessoa")
+    nome_pessoa = serializers.CharField(source="pessoa.nome_pessoa", read_only=True)
+
     class Meta:
         model = Telefone
-        fields = "__all__"
+        fields = ["id_telefone", "id_pessoa_interna", "nome_pessoa", "telefone"]
 
 
 class EmailSerializer(serializers.ModelSerializer):
@@ -212,13 +215,13 @@ class PessoaField(serializers.PrimaryKeyRelatedField):
 
 
 class DiscenteSerializer(serializers.ModelSerializer):
-    id_pessoa_interna = serializers.PrimaryKeyRelatedField(queryset=Pessoa.objects.all(), source="pessoa")
+    id_pessoa_interna = serializers.PrimaryKeyRelatedField(source="pessoa", read_only=True)
     nome_pessoa = serializers.CharField(source="pessoa.nome_pessoa", read_only=True)
     cpf = serializers.CharField(source="pessoa.cpf", read_only=True)
     rg = serializers.CharField(source="pessoa.rg", read_only=True)
 
-    id_curso = serializers.PrimaryKeyRelatedField(queryset=Curso.objects.all(), source="curso")
-    id_centro = serializers.PrimaryKeyRelatedField(queryset=Centro.objects.all(), source="curso.centro")
+    id_curso = serializers.PrimaryKeyRelatedField(source="curso", read_only=True)
+    id_centro = serializers.PrimaryKeyRelatedField(source="curso.centro", read_only=True)
     nome_centro = serializers.CharField(source="curso.centro.nome_centro", read_only=True)
     sigla_centro = serializers.CharField(source="curso.centro.sigla_centro", read_only=True)
     nome_curso = serializers.CharField(source="curso.nome_curso", read_only=True)
@@ -226,23 +229,57 @@ class DiscenteSerializer(serializers.ModelSerializer):
     modalidade_curso = serializers.CharField(source="curso.modalidade_curso", read_only=True)
     classificacao_curso = serializers.CharField(source="curso.classificacao_curso", read_only=True)
 
+    telefones = serializers.SerializerMethodField()
+    emails = serializers.SerializerMethodField()
+
     class Meta:
         model = Discente
         fields = [
             "id_curso_aluno",
             "id_pessoa_interna",
             "nome_pessoa",
-            "cpf", "rg", "id_curso", "id_centro" , "nome_centro", "sigla_centro", "nome_curso", "nivel_curso", "modalidade_curso",
-            "classificacao_curso", "matricula", "ativo"
+            "cpf", "rg", "id_curso", "id_centro", "nome_centro", "sigla_centro", "nome_curso", "nivel_curso",
+            "modalidade_curso",
+            "classificacao_curso", "matricula", "telefones", "emails", "ativo"
         ]
-        extra_kwargs = {field.name: {'read_only': True} for field in Discente._meta.fields}
+
+    def get_telefones(self, obj):
+        if obj.pessoa:
+            queryset = obj.pessoa.telefone_set.all()
+            return TelefonePessoaSerializer(queryset, many=True, context=self.context).data
+        return []
+
+    def get_emails(self, obj):
+        if obj.pessoa:
+            queryset = obj.pessoa.email_set.all()
+            return EmailPessoaSerializer(queryset, many=True, context=self.context).data
+        return []
 
 
 class ServidorSerializer(serializers.ModelSerializer):
-    pessoa = PessoaSerializer()
-    cargo = serializers.StringRelatedField()
+    id_pessoa_interna = serializers.PrimaryKeyRelatedField(queryset=Pessoa.objects.all(), source="pessoa")
+    nome_pessoa = serializers.CharField(source="pessoa.nome_pessoa", read_only=True)
+    cpf = serializers.CharField(source="pessoa.cpf", read_only=True)
+    rg = serializers.CharField(source="pessoa.rg", read_only=True)
+
+    cargo = serializers.StringRelatedField(read_only=True)
 
     class Meta:
         model = Servidor
-        fields = "__all__"
-        extra_kwargs = {field.name: {'read_only': True} for field in Servidor._meta.fields}
+        fields = ["id_contrato_rh", "id_pessoa_interna", "nome_pessoa", "cpf", "rg", "cargo", "matricula",
+                  "telefones", "emails", "ativo"]
+
+    telefones = serializers.SerializerMethodField()
+    emails = serializers.SerializerMethodField()
+
+    def get_telefones(self, obj):
+        if obj.pessoa:
+            queryset = obj.pessoa.telefone_set.all()
+            return TelefonePessoaSerializer(queryset, many=True, context=self.context).data
+        return []
+
+    def get_emails(self, obj):
+        if obj.pessoa:
+            queryset = obj.pessoa.email_set.all()
+            return EmailPessoaSerializer(queryset, many=True, context=self.context).data
+        return []
