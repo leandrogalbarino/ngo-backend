@@ -53,6 +53,7 @@ class CentroResumoSerializer(serializers.ModelSerializer):
         fields = ["nome_centro", "sigla_centro"]
         read_only = ["nome_centro", "sigla_centro"]
 
+
 class CentroField(serializers.RelatedField):
     def to_representation(self, value: Centro):
         return CentroResumoSerializer(value).data
@@ -63,10 +64,12 @@ class CentroField(serializers.RelatedField):
         except Centro.DoesNotExist:
             raise ValidationError('Não existe nenhum centro com este ID.')
 
+
 # OK
 class UnidadeSerializer(serializers.ModelSerializer):
-    id_tipo_unidade = serializers.PrimaryKeyRelatedField(queryset=TipoUnidade.objects.all(),source="tipo_unidade")
-    id_situacao_unidade = serializers.PrimaryKeyRelatedField(queryset=SituacaoUnidade.objects.all(), source="situacao_unidade")
+    id_tipo_unidade = serializers.PrimaryKeyRelatedField(queryset=TipoUnidade.objects.all(), source="tipo_unidade")
+    id_situacao_unidade = serializers.PrimaryKeyRelatedField(queryset=SituacaoUnidade.objects.all(),
+                                                             source="situacao_unidade")
     id_centro = serializers.PrimaryKeyRelatedField(queryset=Centro.objects.all(), source="centro")
 
     tipo_unidade = serializers.StringRelatedField(read_only=True)
@@ -86,14 +89,14 @@ class UnidadeField(serializers.PrimaryKeyRelatedField):
 
 
 class CursoSerializer(serializers.ModelSerializer):
-
     id_centro = serializers.PrimaryKeyRelatedField(queryset=Centro.objects.all(), source="centro")
-    nome_centro = serializers.RelatedField(read_only=True)
-    sigla_centro = serializers.RelatedField(read_only=True)
+    nome_centro = serializers.CharField(source="centro.nome_centro", read_only=True)
+    sigla_centro = serializers.CharField(source="centro.sigla_centro", read_only=True)
+
     class Meta:
         model = Curso
-        fields = "__all__"
-        extra_kwargs = {field.name: {'read_only': True} for field in Curso._meta.fields}
+        fields = ['id_curso', "id_centro", "nome_centro", "sigla_centro", "nome_curso", "nivel_curso",
+                  "modalidade_curso", "classificacao_curso"]
 
 
 class CargoSerializer(serializers.ModelSerializer):
