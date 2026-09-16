@@ -212,12 +212,29 @@ class PessoaField(serializers.PrimaryKeyRelatedField):
 
 
 class DiscenteSerializer(serializers.ModelSerializer):
-    pessoa = PessoaSerializer()
-    curso = CursoSerializer()
+    id_pessoa_interna = serializers.PrimaryKeyRelatedField(queryset=Pessoa.objects.all(), source="pessoa")
+    nome_pessoa = serializers.CharField(source="pessoa.nome_pessoa", read_only=True)
+    cpf = serializers.CharField(source="pessoa.cpf", read_only=True)
+    rg = serializers.CharField(source="pessoa.rg", read_only=True)
+
+    id_curso = serializers.PrimaryKeyRelatedField(queryset=Curso.objects.all(), source="curso")
+    id_centro = serializers.PrimaryKeyRelatedField(queryset=Centro.objects.all(), source="curso.centro")
+    nome_centro = serializers.CharField(source="curso.centro.nome_centro", read_only=True)
+    sigla_centro = serializers.CharField(source="curso.centro.sigla_centro", read_only=True)
+    nome_curso = serializers.CharField(source="curso.nome_curso", read_only=True)
+    nivel_curso = serializers.CharField(source="curso.nivel_curso", read_only=True)
+    modalidade_curso = serializers.CharField(source="curso.modalidade_curso", read_only=True)
+    classificacao_curso = serializers.CharField(source="curso.classificacao_curso", read_only=True)
 
     class Meta:
         model = Discente
-        fields = "__all__"
+        fields = [
+            "id_curso_aluno",
+            "id_pessoa_interna",
+            "nome_pessoa",
+            "cpf", "rg", "id_curso", "id_centro" , "nome_centro", "sigla_centro", "nome_curso", "nivel_curso", "modalidade_curso",
+            "classificacao_curso", "matricula", "ativo"
+        ]
         extra_kwargs = {field.name: {'read_only': True} for field in Discente._meta.fields}
 
 
