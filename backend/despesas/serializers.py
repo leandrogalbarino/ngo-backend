@@ -23,6 +23,19 @@ class ValorDocumentoSerializer(serializers.ModelSerializer):
         model = ValorDocumento
         fields = ["id_tipo_documento", "valor_documento", "tipo_documento"]
 
+    def create(self, validated_data):
+        view = self.context.get("view")
+        if not view:
+            raise serializers.ValidationError("O id da transação deve ser enviado via URL.")
+
+        id_transacao = view.kwargs.get("transacao_pk")
+        try:
+            transacao = Transacao.objects.get(pk=id_transacao)
+        except Transacao.DoesNotExist:
+            raise serializers.ValidationError("Transação não encontrada.")
+        validated_data['versao_transacao'] = transacao.versao_transacao
+        transacao = ValorDocumento.objects.create(**validated_data)
+        return transacao
 
 class GrupoFinalidadeSerializer(serializers.ModelSerializer):
     class Meta:
