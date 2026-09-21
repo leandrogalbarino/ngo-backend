@@ -1,4 +1,5 @@
 from django.db import transaction
+from django.forms.models import model_to_dict
 from rest_framework import serializers
 from rest_framework.relations import PrimaryKeyRelatedField
 
@@ -22,6 +23,20 @@ class ValorDocumentoSerializer(serializers.ModelSerializer):
     class Meta:
         model = ValorDocumento
         fields = ["id_tipo_documento", "valor_documento", "tipo_documento"]
+
+    def create(self, validated_data):
+        view = self.context.get("view")
+        if not view:
+            raise serializers.ValidationError("O id da transação deve ser enviado via URL.")
+
+        id_transacao = view.kwargs.get("transacao_pk")
+        try:
+            transacao = Transacao.objects.get(pk=id_transacao)
+        except Transacao.DoesNotExist:
+            raise serializers.ValidationError("Transação não encontrada.")
+        validated_data['versao_transacao'] = transacao.versao_transacao
+        transacao = ValorDocumento.objects.create(**validated_data)
+        return transacao
 
 
 class GrupoFinalidadeSerializer(serializers.ModelSerializer):
@@ -169,14 +184,13 @@ class VersaoTransacaoSerializer(serializers.ModelSerializer):
     id_beneficiario = serializers.PrimaryKeyRelatedField(required=False, allow_null=True, queryset=Pessoa.objects.all(),
                                                          source="beneficiario")
     id_usuario = serializers.PrimaryKeyRelatedField(read_only=True, source="usuario")
-    #usuario =serializers.SerializerMethodField(read_only=True)
 
     finalidade = serializers.StringRelatedField(read_only=True)
     unidade_credora = serializers.StringRelatedField(read_only=True)
     unidade_executora = serializers.StringRelatedField(read_only=True)
     status_pagamento = serializers.StringRelatedField(read_only=True)
     beneficiario = serializers.StringRelatedField(read_only=True)
-    id_transacao = serializers.PrimaryKeyRelatedField(read_only=True, source="transacao")
+    id_transacao = serializers.PrimaryKeyRelatedField(queryset=Transacao.objects.all(), source="transacao")
 
     documentos = ValorDocumentoSerializer(many=True, required=False)
 
@@ -218,7 +232,6 @@ class VersaoTransacaoSerializer(serializers.ModelSerializer):
                     "id_tipo_documento": doc,
                     "error": "Não é possível enviar mais de um documento do mesmo tipo."
                 })
-
 
         if not finalidade:
             if validation_errors:
@@ -262,6 +275,29 @@ class VersaoTransacaoSerializer(serializers.ModelSerializer):
 
         return versao_transacao
 
+        # def update(self, instance, validated_data):
+        #     documentos_data = validated_data.pop("documentos", [])
+        #     user = self.context['request'].user
+        #     validated_data['numero_versao'] = int(instance.numero_versao) + 1
+        #     old_versao_transacao = model_to_dict(instance.versao_transacao, exclude=['id_versao_transacao'])
+        #
+        #     new_data = validated_data.pop('transacao', None)
+        #     if new_data is not None:
+        #         raise serializers.ValidationError({'transacao': 'Nenhum campo foi atualizado.'})
+        #
+        #     new_versao_transacao = {**old_versao_transacao, **new_data}
+        #     raise serializers.ValidationError(new_versao_transacao)
+
+        versao_transacao = VersaoTransacao.objects.create(**validated_data, usuario=user)
+        # versao_transacao = None
+        # with transaction.atomic():
+        # docs = [
+        #     ValorDocumento(versao_transacao=versao_transacao, **doc) for doc in documentos_data
+        # ]
+        # ValorDocumento.objects.bulk_create(docs)
+
+        return versao_transacao
+
     # def validate(self, data):
     #     empenho = data.get("empenho")
     #     montante = data.get("montante")
@@ -298,7 +334,7 @@ class VersaoTransacaoSerializer(serializers.ModelSerializer):
 
 
 class TransacaoSerializer(serializers.ModelSerializer):
-    transacao = VersaoTransacaoSerializer(required=True, allow_null=False, source="versao_transacao")
+    transacao = VersaoTransacaoSerializer(read_only=True, allow_null=False, source="versao_transacao")
 
     class Meta:
         model = Transacao
@@ -306,18 +342,70 @@ class TransacaoSerializer(serializers.ModelSerializer):
         read_only_fields = ['id_transacao', 'data_criacao']
 
     def create(self, validated_data):
-        versao_transacao_data = validated_data.pop('versao_transacao', None)
+        versao_transacao_data = self.initial_data.get('transacao', None)
 
         with transaction.atomic():
             transacao = Transacao.objects.create(**validated_data)
             if versao_transacao_data is not None:
-                versao_transacao_data['transacao'] = transacao
+                versao_transacao_data['id_transacao'] = transacao.pk
+                versao_transacao_data['numero_versao'] = 1
                 versao_serializer = VersaoTransacaoSerializer(data=versao_transacao_data, context=self.context)
-                versao_transacao = versao_serializer.create(validated_data=versao_transacao_data)
+                versao_serializer.is_valid(raise_exception=True)
+                versao_transacao = versao_serializer.save()
                 transacao.versao_transacao = versao_transacao
                 transacao.save()
 
         return transacao
+
+    def update(self, instance, validated_data):
+
+        versao_transacao_data = self.initial_data.get('transacao', None)
+        if versao_transacao_data is None:
+            raise serializers.ValidationError('Nenhum dado foi atualizado')
+
+        old_docs = [{
+            "id_tipo_documento": doc.tipo_documento.pk,
+            "valor_documento": doc.valor_documento,
+        } for doc in ValorDocumento.objects.filter(versao_transacao=instance.versao_transacao)]
+
+        if instance.versao_transacao.finalidade.pk != versao_transacao_data['id_finalidade']:
+            tipos_docs = TipoDocumentoParaFinalidade.objects.filter(finalidade=versao_transacao_data['id_finalidade'])
+            tipos_docs_id = [doc.tipo_documento.pk for doc in tipos_docs]
+
+            for doc in old_docs.copy():
+                if doc['id_tipo_documento'] not in tipos_docs_id:
+                    old_docs.remove(doc)
+
+        old_versao_transacao = model_to_dict(instance.versao_transacao, exclude=['id_versao_transacao'])
+        for field, value in old_versao_transacao.copy().items():
+            if field in ['transacao', 'finalidade', 'unidade_executora', 'unidade_credora', 'usuario',
+                         'status_pagamento', 'empenho', 'beneficiario']:
+                old_versao_transacao.pop(field)
+                old_versao_transacao[f'id_{field}'] = value
+
+        new_docs = versao_transacao_data.pop('documentos', [])
+
+        if old_docs or new_docs:
+            dados_combinados = {doc['id_tipo_documento']: doc for doc in old_docs}
+            dados_combinados.update({doc['id_tipo_documento']: doc for doc in new_docs})
+            old_versao_transacao['documentos'] = list(dados_combinados.values())
+
+
+        new_data = {**old_versao_transacao, **versao_transacao_data}
+        for field, value in new_data.copy().items():
+            if value is None:
+                new_data.pop(field)
+
+        with transaction.atomic():
+            new_data['numero_versao'] = int(instance.versao_transacao.numero_versao) + 1
+            new_data['id_transacao'] = instance.pk
+            versao_serializer = VersaoTransacaoSerializer(data=new_data, context=self.context)
+            versao_serializer.is_valid(raise_exception=True)
+
+            versao_transacao = versao_serializer.save()
+            instance.versao_transacao = versao_transacao
+            instance.save()
+        return instance
 
 # class EmpenhoSerializer(serializers.ModelSerializer):
 #     transacoes = TransacaoSerializer(many=True, read_only=True)
