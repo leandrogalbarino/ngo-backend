@@ -21,7 +21,7 @@ class TipoDocumentoViewSet(AtivoListDefaultMixin, viewsets.ModelViewSet, ):
 class ValorDocumentoViewSet(viewsets.ModelViewSet):
     queryset = ValorDocumento.objects.all()
     serializer_class = ValorDocumentoSerializer
-    http_method_names = ['get', 'patch', 'post', 'delete']
+    http_method_names = ['get']
 
 
     def get_queryset(self):
