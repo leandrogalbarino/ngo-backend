@@ -1,5 +1,6 @@
-from astroid.brain.brain_six import transform_six_add_metaclass
 from rest_framework import viewsets
+from rest_framework.exceptions import NotFound
+
 from despesas.models import Transacao, StatusTransacao, VersaoTransacao
 from despesas.serializers import TransacaoSerializer, StatusTransacaoSerializer, VersaoTransacaoSerializer
 
@@ -33,5 +34,7 @@ class VersoesTransacaoViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         transacao_id = self.kwargs.get('transacao_pk')
-
-        return VersaoTransacao.objects.filter(transacao=transacao_id)
+        versao_transacao = VersaoTransacao.objects.filter(transacao=transacao_id)
+        if not versao_transacao:
+            raise NotFound(detail='Transação não encontrada')
+        return versao_transacao
