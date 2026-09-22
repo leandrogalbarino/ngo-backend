@@ -368,8 +368,9 @@ class TransacaoSerializer(serializers.ModelSerializer):
             "valor_documento": doc.valor_documento,
         } for doc in ValorDocumento.objects.filter(versao_transacao=instance.versao_transacao)]
 
-        if instance.versao_transacao.finalidade.pk != versao_transacao_data['id_finalidade']:
-            tipos_docs = TipoDocumentoParaFinalidade.objects.filter(finalidade=versao_transacao_data['id_finalidade'])
+        id_finalidade = versao_transacao_data.pop('id_finalidade', None)
+        if id_finalidade and instance.versao_transacao.finalidade.pk != id_finalidade:
+            tipos_docs = TipoDocumentoParaFinalidade.objects.filter(finalidade=id_finalidade)
             tipos_docs_id = [doc.tipo_documento.pk for doc in tipos_docs]
 
             for doc in old_docs.copy():
