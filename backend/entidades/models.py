@@ -139,6 +139,8 @@ class Pessoa(models.Model):
         managed = False
         db_table = 'pessoas'
 
+    def __str__(self):
+        return self.nome_pessoa
 
 class Discente(models.Model):
     id_curso_aluno = models.AutoField(primary_key=True, db_column="id_curso_aluno")
