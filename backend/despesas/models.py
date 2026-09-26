@@ -125,11 +125,11 @@ class Empenho(models.Model):
 
     @property
     def montante(self):
-        related_transaction = Transacao.objects.filter(empenho=self).aggregate(
+        related_transaction = VersaoTransacao.objects.filter(empenho=self, transacao__isnull=False).aggregate(
             montante=Sum(
                 Case(
-                    When(eh_credito=True, then=F("montante")),
-                    When(eh_credito=False, then=-F("montante")),
+                    When(credito=True, then=F("montante")),
+                    When(credito=False, then=-F("montante")),
                     default=Decimal(0.00),
                 ),
                 output_field=DecimalField(),
