@@ -4,6 +4,7 @@ from rest_framework import serializers
 from rest_framework.relations import PrimaryKeyRelatedField
 
 from despesas.models import *
+from despesas.models import Empenho
 
 
 class TipoDocumentoSerializer(serializers.ModelSerializer):
@@ -223,6 +224,7 @@ class VersaoTransacaoSerializer(serializers.ModelSerializer):
         ]
 
     def validate(self, data):
+        unidade_executora = data.get('unidade_executora')
         finalidade = data.get('finalidade')
         documentos = data.get('documentos', [])
         documentos_id = [doc['tipo_documento'].pk for doc in documentos]
@@ -281,8 +283,9 @@ class VersaoTransacaoSerializer(serializers.ModelSerializer):
         #         )
         #
 
-        empenho_montante = empenho.empenho_montante
-        montante_transacao_update = Transacao.objects.filter(id_transacao=id_transacao, transacao__isnull=False).first()
+        empenho_montante = empenho.montante
+        montante_transacao_update = VersaoTransacao.objects.filter(transacao_id=id_transacao, transacao__isnull=False).first()
+
 
         if montante_transacao_update:
             empenho_montante += montante_transacao_update
@@ -290,8 +293,12 @@ class VersaoTransacaoSerializer(serializers.ModelSerializer):
         if not credito and montante > empenho_montante:
             raise serializers.ValidationError(
                 {
-                    "montante": f"Saldo insuficiente. O Valor da despesa (R$ {montante:.2f}) é maior que o saldo atual (R$ {empenho_montante:.2f})."}
+                    "montante": f"Saldo insuficiente no empenho. O Valor da despesa (R$ {montante:.2f}) é maior que o saldo atual (R$ {empenho_montante:.2f})."}
             )
+        elif credito and not unidade_executora.pode_empenhar:
+            raise serializers.ValidationError({
+                "credito": "Está unidade não tem a permissão para empenhar um valor."
+            })
         return data
 
     def create(self, validated_data):

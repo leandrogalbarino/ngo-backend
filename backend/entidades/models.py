@@ -66,6 +66,7 @@ class UnidadeSIE(models.Model):
     tipo_unidade = models.ForeignKey(TipoUnidade, models.DO_NOTHING, db_column="id_tipo_unidade")
     situacao_unidade = models.ForeignKey(SituacaoUnidade, models.DO_NOTHING, db_column="id_situacao_unidade")
 
+
     class Meta:
         managed = False
         db_table = "v_unidades_sie"
@@ -83,6 +84,7 @@ class Unidade(models.Model):
     centro = models.ForeignKey(Centro, models.DO_NOTHING, blank=False, null=False,  db_column="id_centro_interno")
     tipo_unidade = models.ForeignKey(TipoUnidade, models.DO_NOTHING, blank=False, null=False, db_column="id_tipo_unidade")
     situacao_unidade = models.ForeignKey(SituacaoUnidade, models.DO_NOTHING, blank=False, null=False, db_column="id_situacao_unidade")
+    pode_empenhar = models.BooleanField(models.DO_NOTHING, blank=True, default=False, db_comment="pode_emepenhar")
 
     class Meta:
         managed = False
