@@ -194,6 +194,7 @@ class VersaoTransacaoSerializer(serializers.ModelSerializer):
     beneficiario = serializers.StringRelatedField(read_only=True)
     empenho = serializers.StringRelatedField(read_only=True)
     id_transacao = serializers.PrimaryKeyRelatedField(queryset=Transacao.objects.all(), source="transacao")
+
     documentos = ValorDocumentoSerializer(many=True, required=False)
 
     class Meta:
@@ -266,21 +267,30 @@ class VersaoTransacaoSerializer(serializers.ModelSerializer):
         if validation_errors:
             raise serializers.ValidationError({'documentos': validation_errors})
 
-        # empenho
-        empenho = data.get("empenho")
+        empenho = data.get("empenho", None)
+
         if not empenho:
             return data
 
-        eh_credito = data.get("credito")
+        id_transacao = data.get("id_transacao")
+        credito = data.get("credito")
 
-        # if empenho and not empenho.ativo:
-        # raise serializers.ValidationError(
-        # {"empenho": "Não é possível criar ou modificar transações de um empenho inativo."}
-        # )
-        if not eh_credito and montante > empenho.montante:
+        #     if empenho and not empenho.ativo:
+        #         raise serializers.ValidationError(
+        #             {"empenho": "Não é possível criar ou modificar transações de um empenho inativo."}
+        #         )
+        #
+
+        empenho_montante = empenho.empenho_montante
+        montante_transacao_update = Transacao.objects.filter(id_transacao=id_transacao, transacao__isnull=False).first()
+
+        if montante_transacao_update:
+            empenho_montante += montante_transacao_update
+
+        if not credito and montante > empenho_montante:
             raise serializers.ValidationError(
                 {
-                    "montante": f"Saldo insuficiente. O Valor da despesa (R$ {montante:.2f}) é maior que o saldo atual (R$ {empenho.montante:.2f}) do empenho."}
+                    "montante": f"Saldo insuficiente. O Valor da despesa (R$ {montante:.2f}) é maior que o saldo atual (R$ {empenho_montante:.2f})."}
             )
         return data
 
@@ -297,7 +307,6 @@ class VersaoTransacaoSerializer(serializers.ModelSerializer):
             ValorDocumento.objects.bulk_create(docs)
 
         return versao_transacao
-
 
 class TransacaoSerializer(serializers.ModelSerializer):
     transacao = VersaoTransacaoSerializer(read_only=True, allow_null=False, source="versao_transacao")

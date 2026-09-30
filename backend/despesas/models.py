@@ -48,8 +48,7 @@ class Finalidade(models.Model):
     """
     id_finalidade = models.AutoField(primary_key=True, db_column='id_finalidade')
     natureza_finalidade = models.ForeignKey(NaturezaFinalidade, models.DO_NOTHING, db_column="id_natureza_finalidade")
-    grupo_finalidade = models.ForeignKey(GrupoFinalidade, models.DO_NOTHING, db_column="id_grupo_finalidade", null=True,
-                                         blank=True)
+    grupo_finalidade = models.ForeignKey(GrupoFinalidade, models.DO_NOTHING, db_column="id_grupo_finalidade", null=True, blank=True)
 
     finalidade = models.CharField(max_length=512, unique=True, null=False, blank=False)
     ativo = models.BooleanField(default=True, blank=True)
@@ -66,7 +65,6 @@ class Finalidade(models.Model):
 
     def __str__(self):
         return self.finalidade
-
 
 class TipoDocumento(models.Model):
     """
@@ -96,7 +94,6 @@ class TipoDocumentoParaFinalidade(models.Model):
         default=True, blank=True, db_column='obrigatorio',
         db_comment='Se este tipo de documento é obrigatório para esta finalidade'
     )
-
     # ativo = models.BooleanField(default=True, blank=True, db_column='ativo')
 
     class Meta:
@@ -129,21 +126,22 @@ class Empenho(models.Model):
     #ativo = models.BooleanField(default=True, blank=True, db_column='ativo')
     @property
     def montante(self):
-        result = VersaoTransacao.objects.filter(empenho=self, transacao__isnull=False).aggregate(
+        related_transaction = VersaoTransacao.objects.filter(empenho=self, transacao__isnull=False).aggregate(
             montante=Sum(
                 Case(
                     When(credito=True, then=F("montante")),
                     When(credito=False, then=-F("montante")),
-                    default=Decimal("0.00"),
+                    default=Decimal(0.00),
                 ),
                 output_field=DecimalField(),
             )
         )
-        return result["montante"] or Decimal("0.00")
+        return related_transaction["montante"] or Decimal(0.00)
 
     class Meta:
         managed = False
         db_table = "empenhos"
+
     def __str__(self):
         return self.numero_empenho
 
@@ -225,8 +223,6 @@ class VersaoTransacao(models.Model):
     unidade_executora = models.ForeignKey(
         Unidade,
         models.DO_NOTHING,
-        null=True,
-        blank=True,
         related_name="+",
         db_column="id_unidade_executora",
     )
