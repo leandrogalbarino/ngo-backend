@@ -225,6 +225,8 @@ class VersaoTransacao(models.Model):
     unidade_executora = models.ForeignKey(
         Unidade,
         models.DO_NOTHING,
+        null=True,
+        blank=True,
         related_name="+",
         db_column="id_unidade_executora",
     )
