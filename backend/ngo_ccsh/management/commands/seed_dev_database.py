@@ -21,14 +21,13 @@ class Command(BaseCommand):
         if isinstance(field, models.BooleanField):
             return value.upper() in ("TRUE", "1", "YES")
 
-        if isinstance(field, ( models.IntegerField, models.AutoField, models.BigIntegerField)):
+        if isinstance(field, (models.IntegerField, models.AutoField, models.BigIntegerField)):
             return int(value)
 
         if isinstance(field, models.DecimalField):
             return Decimal(value)
 
         return value
-
 
     def handle(self, *args, **kwargs):
         csv_path = Path(settings.BASE_DIR) / 'database' / 'csv'

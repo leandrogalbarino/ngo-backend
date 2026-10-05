@@ -3,8 +3,10 @@ from django.forms.models import model_to_dict
 from rest_framework import serializers
 from rest_framework.relations import PrimaryKeyRelatedField
 
+from entidades.models import Unidade, Pessoa
+from ngo_ccsh.constrains import CUSTEIO, CAPITAL
 from despesas.models import *
-from despesas.models import Empenho
+from despesas.models import Empenho, Finalidade
 
 
 class TipoDocumentoSerializer(serializers.ModelSerializer):
@@ -60,7 +62,7 @@ class TipoDocumentoParaFinalidadeSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = TipoDocumentoParaFinalidade
-        fields = ["id_tipo_documento", "tipo_documento", "obrigatorio"]
+        fields = ["id_tipo_documento", "tipo_documento", "obrigatorio", "ativo"]
 
     def validate_id_tipo_documento(self, value):
         if not value.ativo:
@@ -135,6 +137,7 @@ class FinalidadeSerializer(serializers.ModelSerializer):
             for tipo_registered in instance.tipodocumentoparafinalidade_set.all():
                 if item['tipo_documento'].pk == tipo_registered.tipo_documento.id_tipo_documento:
                     tipo_registered.obrigatorio = item.get('obrigatorio', True)
+                    tipo_registered.ativo = item.get('ativo', instance.ativo)
                     tipo_registered.save()
                     item_registered = True
                     break
@@ -174,7 +177,7 @@ class TransacaoReadSerializer(serializers.ModelSerializer):
 
 
 class VersaoTransacaoSerializer(serializers.ModelSerializer):
-    id_finalidade = PrimaryKeyRelatedField(required=False, allow_null=True, queryset=Finalidade.objects.all(),
+    id_finalidade = PrimaryKeyRelatedField(queryset=Finalidade.objects.all(),
                                            source="finalidade")
     id_unidade_receptora = serializers.PrimaryKeyRelatedField(queryset=Unidade.objects.all(), required=False,
                                                               allow_null=True, source="unidade_receptora")
@@ -224,36 +227,37 @@ class VersaoTransacaoSerializer(serializers.ModelSerializer):
         ]
 
     def validate(self, data):
-        unidade_executora = data.get('unidade_executora')
         finalidade = data.get('finalidade')
         documentos = data.get('documentos', [])
         documentos_id = [doc['tipo_documento'].pk for doc in documentos]
         montante = data.get('montante', None)
-        validation_errors = []
+
+        validation_errors = {}
+        documentos_validation_errors = []
+        montante_validation_errors = []
+        empenho_validation_errors = []
+        credito_validation_errors = []
 
         if not montante:
-            raise serializers.ValidationError({'montante': 'O montante é obrigatório.'})
+            montante_validation_errors.append('O montante é obrigatório.')
 
+        # docs
         vistos = set()
         for doc in documentos_id:
             if doc not in vistos:
                 vistos.add(doc)
             else:
-                validation_errors.append({
+                documentos_validation_errors.append({
                     "id_tipo_documento": doc,
                     "error": "Não é possível enviar mais de um documento do mesmo tipo."
                 })
-
-        if not finalidade:
-            validation_errors.append({'finalidade': 'A finalidade é obrigatório para uma transação'})
-            raise serializers.ValidationError(validation_errors)
 
         tipos_documentos_possiveis = finalidade.tipodocumentoparafinalidade_set.select_related('tipo_documento').all()
         tipos_documentos_possiveis_pk = [tipo_doc.tipo_documento.pk for tipo_doc in tipos_documentos_possiveis]
 
         for tipo_doc in tipos_documentos_possiveis:
             if tipo_doc.obrigatorio and tipo_doc.tipo_documento.pk not in documentos_id:
-                validation_errors.append({
+                documentos_validation_errors.append({
                     "id_tipo_documento": tipo_doc.tipo_documento.pk,
                     "error": f"O tipo documento '{tipo_doc.tipo_documento.tipo_documento}' é obrigatório para esta finalidade."
                 })
@@ -261,44 +265,69 @@ class VersaoTransacaoSerializer(serializers.ModelSerializer):
         for doc in documentos:
             tipo_doc_obj = doc['tipo_documento']
             if tipo_doc_obj.pk not in tipos_documentos_possiveis_pk:
-                validation_errors.append({
+                documentos_validation_errors.append({
                     "id_tipo_documento": tipo_doc_obj.pk,
                     "error": f"O tipo de documento '{tipo_doc_obj.tipo_documento}' não é permitido para esta finalidade."
                 })
 
-        if validation_errors:
-            raise serializers.ValidationError({'documentos': validation_errors})
+        if documentos_validation_errors:
+            validation_errors.append({"documentos": documentos_validation_errors})
 
-        empenho = data.get("empenho", None)
-
-        if not empenho:
-            return data
-
+        # montante
         id_transacao = data.get("id_transacao")
+        unidade_executora = data.get('unidade_executora')
+        empenho = data.get("empenho", None)
         credito = data.get("credito")
 
-        #     if empenho and not empenho.ativo:
-        #         raise serializers.ValidationError(
-        #             {"empenho": "Não é possível criar ou modificar transações de um empenho inativo."}
-        #         )
-        #
+        transacao_update = VersaoTransacao.objects.filter(transacao_id=id_transacao,
+                                                          transacao__isnull=False).first()
 
-        empenho_montante = empenho.montante
-        montante_transacao_update = VersaoTransacao.objects.filter(transacao_id=id_transacao, transacao__isnull=False).first()
+        montante_unidade = 0
+        if finalidade.natureza_finalidade == CUSTEIO:
+            montante_unidade = unidade_executora.montante_custeio + transacao_update.montante
 
+        elif finalidade.natureza_finalidade == CAPITAL:
+            montante_unidade = unidade_executora.montante_capital + transacao_update.montante
 
-        if montante_transacao_update:
-            empenho_montante += montante_transacao_update
+        if not credito and montante_unidade < montante:
+            montante_validation_errors.append(f"O valor do montante na unidade '{unidade_executora}' é insuficiente. "
+                                              f"Valor do montante na unidade: {montante_unidade}.")
 
-        if not credito and montante > empenho_montante:
-            raise serializers.ValidationError(
-                {
-                    "montante": f"Saldo insuficiente no empenho. O Valor da despesa (R$ {montante:.2f}) é maior que o saldo atual (R$ {empenho_montante:.2f})."}
+        if not empenho:
+            if not validation_errors:
+                return data
+            raise serializers.ValidationError(validation_errors)
+
+        if not empenho.ativo:
+            empenho_validation_errors.append(
+                "Não é possível criar ou modificar transações de um empenho inativo."
             )
+
+        montante_empenho = empenho.montante
+
+        if transacao_update:  # Somar o valor que tinha sido subtraído.
+            montante_empenho += transacao_update.montante
+
+        if not credito and montante > montante_empenho:
+            montante_validation_errors.append(
+                f"Saldo insuficiente no empenho. O Valor da despesa (R$ {montante:.2f}) "
+                f"é maior que o saldo atual (R$ {montante_empenho:.2f})."
+            )
+
         elif credito and not unidade_executora.pode_empenhar:
-            raise serializers.ValidationError({
-                "credito": "Está unidade não tem a permissão para empenhar um valor."
-            })
+            credito_validation_errors.append("Está unidade não tem a permissão para empenhar um valor.")
+
+        if empenho_validation_errors:
+            validation_errors['id_empenho'] = empenho_validation_errors
+        if montante_validation_errors:
+            validation_errors['montante'] = montante_validation_errors
+
+        if credito_validation_errors:
+            validation_errors['credito'] = credito_validation_errors
+
+        if validation_errors:
+            raise serializers.ValidationError(validation_errors)
+
         return data
 
     def create(self, validated_data):
@@ -314,6 +343,7 @@ class VersaoTransacaoSerializer(serializers.ModelSerializer):
             ValorDocumento.objects.bulk_create(docs)
 
         return versao_transacao
+
 
 class TransacaoSerializer(serializers.ModelSerializer):
     transacao = VersaoTransacaoSerializer(read_only=True, allow_null=False, source="versao_transacao")
@@ -395,7 +425,8 @@ class EmpenhoSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Empenho
-        fields = ["id_empenho", "numero_empenho", "numero_pen", "finalidade", "data_criacao", "montante", "transacoes"]
+        fields = ["id_empenho", "numero_empenho", "numero_pen", "finalidade", "data_criacao", "montante", "transacoes",
+                  "ativo"]
         read_only_fields = ["id_empenho", "data_criacao", "montante"]
 
     def get_transacoes(self, obj):

@@ -16,7 +16,6 @@ class TransacoesViewSet(viewsets.ModelViewSet):
     serializer_class = TransacaoSerializer
     filterset_fields = ['data_criacao']
 
-
 class StatusTransacaoViewSet(viewsets.ModelViewSet):
     queryset = StatusTransacao.objects.all()
     serializer_class = StatusTransacaoSerializer
