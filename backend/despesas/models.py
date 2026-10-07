@@ -3,8 +3,9 @@ from decimal import Decimal
 from django.db import models
 from django.db.models import Sum, Case, When, F, DecimalField
 
+
 # from entidades.models import Unidade, Pessoa
-#from usuarios.models import Usuario
+# from usuarios.models import Usuario
 
 
 class NaturezaFinalidade(models.Model):
@@ -129,7 +130,8 @@ class Empenho(models.Model):
 
     @property
     def montante(self):
-        related_transaction = VersaoTransacao.objects.filter(empenho=self, transacao__isnull=False).aggregate(
+        related_transaction = VersaoTransacao.objects.filter(empenho=self,
+                                                             transacao__versao_transacao=F('id_versao_transacao')).aggregate(
             montante=Sum(
                 Case(
                     When(credito=True, then=F("montante")),

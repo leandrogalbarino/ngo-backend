@@ -26,27 +26,6 @@ class TipoUnidadeSerializer(serializers.ModelSerializer):
         fields = "__all__"
         extra_kwargs = {field.name: {'read_only': True} for field in TipoUnidade._meta.fields}
 
-
-# class TipoUnidadeField(serializers.RelatedField):
-#     def to_representation(self, value: TipoUnidade):
-#         return value.tipo_unidade
-#
-#     def to_internal_value(self, data: TipoUnidade):
-#         try:
-#             return TipoUnidade.objects.get(id_tipo_unidade=data).pk
-#         except TipoUnidade.DoesNotExist:
-#             raise ValidationError('não existe nenhum tipo de unidade com este ID.')
-#
-# class SituacaoUnidadeField(serializers.RelatedField):
-#     def to_representation(self, value: SituacaoUnidade):
-#         return value.situacao_unidade
-#
-#     def to_internal_value(self, data: SituacaoUnidade):
-#         try:
-#             return SituacaoUnidade.objects.get(id_situacao_unidade=data).pk
-#         except SituacaoUnidade.DoesNotExist:
-#             raise ValidationError('Não existe nenhuma situacao de unidade com este ID.')
-
 class CentroResumoSerializer(serializers.ModelSerializer):
     class Meta:
         model = Centro
@@ -77,16 +56,13 @@ class UnidadeSerializer(serializers.ModelSerializer):
     centro = serializers.StringRelatedField(read_only=True)
     id_unidade_sie = serializers.PrimaryKeyRelatedField(read_only=True, source="unidade_sie")
 
+
     class Meta:
         model = Unidade
         fields = ["id_unidade_interna", "nome_unidade", "cod_estruturado", "id_centro", "centro", "id_tipo_unidade",
-                  "tipo_unidade", "id_situacao_unidade", "id_unidade_sie", "situacao_unidade", "pode_empenhar"]
-        read_only = ['id_unidade_interna']
-
-
-class UnidadeField(serializers.PrimaryKeyRelatedField):
-    def to_representation(self, value: Centro):
-        return UnidadeSerializer(value).data
+                  "tipo_unidade", "id_situacao_unidade", "id_unidade_sie", "situacao_unidade",
+                  "pode_empenhar", "montante_custeio", "montante_capital"]
+        read_only = ['id_unidade_interna', "montante_custeio", "montante_capital"]
 
 
 class CursoSerializer(serializers.ModelSerializer):

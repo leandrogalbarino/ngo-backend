@@ -1,9 +1,10 @@
-from django.contrib.sessions import serializers
-from django.http import Http404
 from rest_framework import viewsets, status
-from rest_framework.exceptions import ValidationError, MethodNotAllowed
+from rest_framework.exceptions import MethodNotAllowed
 from rest_framework.response import Response
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework.filters import OrderingFilter
 
+from entidades.filters import UnidadeFilterSet
 from entidades.models import (
     Discente,
     Servidor,
@@ -60,8 +61,12 @@ class CentroViewSet(viewsets.ModelViewSet):
 
 class UnidadeViewSet(viewsets.ModelViewSet):
     queryset = Unidade.objects.all().select_related("centro", "tipo_unidade", "situacao_unidade")
-    serializer_class = UnidadeSerializer
     http_method_names = ["get", 'post', "patch"]
+
+    ordering_fields = ['id_grupo_finalidade','grupo_finalidade']
+    filter_backends = (DjangoFilterBackend, OrderingFilter)
+    serializer_class = UnidadeSerializer
+    filterset_class = UnidadeFilterSet
 
     def partial_update(self, request: object, *args: object, **kwargs: object) -> Response:
         unidade: Unidade = self.get_object()
