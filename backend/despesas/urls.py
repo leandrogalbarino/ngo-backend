@@ -1,7 +1,3 @@
-from django.urls import include, path
-from rest_framework.routers import DefaultRouter
-from rest_framework_nested import routers
-
 from despesas.views.documentos import TipoDocumentoViewSet, ValorDocumentoViewSet
 from despesas.views.empenhos import EmpenhoViewSet
 from despesas.views.finalidades import (
@@ -14,6 +10,10 @@ from despesas.views.transacoes import (
     TransacoesViewSet,
     VersoesTransacaoViewSet,
 )
+from despesas.views.unidades import UnidadeViewSet
+from django.urls import include, path
+from rest_framework.routers import DefaultRouter
+from rest_framework_nested import routers
 
 app_name = "despesas"
 
@@ -32,6 +32,8 @@ router.register(
 )
 router.register("transacoes", TransacoesViewSet, basename="transacoes")
 router.register("empenhos", EmpenhoViewSet, basename="empenhos")
+router.register("unidades", UnidadeViewSet, basename="unidades")
+
 
 transacao_router = routers.NestedSimpleRouter(router, r"transacoes", lookup="transacao")
 transacao_router.register(

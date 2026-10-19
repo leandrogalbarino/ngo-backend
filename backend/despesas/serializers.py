@@ -553,3 +553,45 @@ class EmpenhoSerializer(serializers.ModelSerializer):
     def get_transacoes(self, obj):
         queryset = Transacao.objects.filter(versao_transacao__empenho=obj)
         return TransacaoSerializer(queryset, many=True, context=self.context).data
+
+
+class UnidadeSerializer(serializers.ModelSerializer):
+    id_tipo_unidade = serializers.PrimaryKeyRelatedField(
+        read_only=True, source="tipo_unidade"
+    )
+    id_situacao_unidade = serializers.PrimaryKeyRelatedField(
+        read_only=True, source="situacao_unidade"
+    )
+    id_centro = serializers.PrimaryKeyRelatedField(read_only=True, source="centro")
+
+    tipo_unidade = serializers.StringRelatedField(read_only=True)
+    situacao_unidade = serializers.StringRelatedField(read_only=True)
+    centro = serializers.StringRelatedField(read_only=True)
+    id_unidade_sie = serializers.PrimaryKeyRelatedField(
+        read_only=True, source="unidade_sie"
+    )
+
+    class Meta:
+        model = Unidade
+        fields = [
+            "id_unidade_interna",
+            "id_unidade_sie",
+            "nome_unidade",
+            "cod_estruturado",
+            "id_centro",
+            "centro",
+            "id_tipo_unidade",
+            "tipo_unidade",
+            "id_situacao_unidade",
+            "situacao_unidade",
+            "pode_empenhar",
+            "montante_custeio",
+            "montante_capital",
+        ]
+        read_only = [
+            "nome_unidade",
+            "cod_estruturado",
+            "pode_empenhar",
+            "montante_custeio",
+            "montante_capital",
+        ]

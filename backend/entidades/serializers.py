@@ -1,6 +1,4 @@
 from django.core.exceptions import ValidationError
-from rest_framework import serializers
-
 from entidades.models import (
     Cargo,
     Centro,
@@ -14,6 +12,7 @@ from entidades.models import (
     TipoUnidade,
     Unidade,
 )
+from rest_framework import serializers
 
 
 class CentroSerializer(serializers.ModelSerializer):
@@ -82,6 +81,7 @@ class UnidadeSerializer(serializers.ModelSerializer):
         model = Unidade
         fields = [
             "id_unidade_interna",
+            "id_unidade_sie",
             "nome_unidade",
             "cod_estruturado",
             "id_centro",
@@ -89,13 +89,10 @@ class UnidadeSerializer(serializers.ModelSerializer):
             "id_tipo_unidade",
             "tipo_unidade",
             "id_situacao_unidade",
-            "id_unidade_sie",
             "situacao_unidade",
             "pode_empenhar",
-            "montante_custeio",
-            "montante_capital",
         ]
-        read_only = ["id_unidade_interna", "montante_custeio", "montante_capital"]
+        read_only = ["id_unidade_interna"]
 
 
 class CursoSerializer(serializers.ModelSerializer):
