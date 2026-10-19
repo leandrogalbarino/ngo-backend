@@ -349,11 +349,11 @@ class VersaoTransacaoSerializer(serializers.ModelSerializer):
 
         if finalidade.natureza_finalidade.pk == CUSTEIO:
             montante_unidade = (
-                unidade_executora.montante_custeio + transacao_update_montante
+                unidade_executora.saldo_custeio + transacao_update_montante
             )
         elif finalidade.natureza_finalidade.pk == CAPITAL:
             montante_unidade = (
-                unidade_executora.montante_capital + transacao_update_montante
+                unidade_executora.saldo_capital + transacao_update_montante
             )
 
         if not credito and montante_unidade < montante:
@@ -365,6 +365,11 @@ class VersaoTransacaoSerializer(serializers.ModelSerializer):
         if credito and not unidade_executora.pode_empenhar:
             credito_validation_errors.append(
                 "Está unidade não tem a permissão para empenhar um valor."
+            )
+
+        if empenho and unidade_receptora:
+            empenho_validation_errors.append(
+                "Não é possível fazer um empenho com uma unidade receptora escolhida."
             )
 
         if not empenho:
@@ -585,13 +590,18 @@ class UnidadeSerializer(serializers.ModelSerializer):
             "id_situacao_unidade",
             "situacao_unidade",
             "pode_empenhar",
-            "montante_custeio",
-            "montante_capital",
+            "saldo_capital",
+            "orcamento_capital",
+            "orcamento_executado_capital",
+            "saldo_custeio",
+            "orcamento_custeio",
+            "orcamento_executado_custeio",
         ]
+
         read_only = [
             "nome_unidade",
             "cod_estruturado",
             "pode_empenhar",
-            "montante_custeio",
-            "montante_capital",
+            "saldo_custeio",
+            "saldo_capital",
         ]

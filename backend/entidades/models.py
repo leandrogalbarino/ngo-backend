@@ -149,7 +149,7 @@ class Unidade(models.Model):
         db_column="id_situacao_unidade",
     )
     pode_empenhar = models.BooleanField(
-        models.DO_NOTHING, blank=True, default=False, db_comment="pode_emepenhar"
+        models.DO_NOTHING, blank=True, default=False, db_comment="pode_empenhar"
     )
 
     class Meta:
@@ -159,6 +159,27 @@ class Unidade(models.Model):
     def __str__(self) -> str:
         return self.nome_unidade
 
+    def __orcamento__(self, finalidade):
+        transactions = VersaoTransacao.objects.filter(
+            transacao__versao_transacao=F("id_versao_transacao"),
+            finalidade__natureza_finalidade=finalidade,
+            unidade_receptora=self,
+        ).aggregate(
+            montante=Sum("montante"),
+        )
+        return transactions["montante"] or Decimal("0.00")
+
+    def __orcamento_executado__(self, finalidade):
+        transactions = VersaoTransacao.objects.filter(
+            transacao__versao_transacao=F("id_versao_transacao"),
+            finalidade__natureza_finalidade=finalidade,
+            unidade_executora=self,
+            credito=False,
+        ).aggregate(
+            montante=Sum("montante"),
+        )
+        return transactions["montante"] or Decimal("0.00")
+
     def __montante_calc__(self, finalidade):
         transactions = VersaoTransacao.objects.filter(
             transacao__versao_transacao=F("id_versao_transacao"),
@@ -167,7 +188,7 @@ class Unidade(models.Model):
             montante=Sum(
                 Case(
                     When(unidade_receptora=self, then=F("montante")),
-                    When(unidade_executora=self, then=-F("montante")),
+                    When(unidade_executora=self, credito=False, then=-F("montante")),
                     default=Decimal("0.00"),
                 ),
                 output_field=DecimalField(),
@@ -176,12 +197,28 @@ class Unidade(models.Model):
         return transactions["montante"] or Decimal("0.00")
 
     @property
-    def montante_custeio(self):
+    def saldo_custeio(self):
         return self.__montante_calc__(CUSTEIO)
 
     @property
-    def montante_capital(self):
+    def saldo_capital(self):
         return self.__montante_calc__(CAPITAL)
+
+    @property
+    def orcamento_capital(self):
+        return self.__orcamento__(CAPITAL)
+
+    @property
+    def orcamento_custeio(self):
+        return self.__orcamento__(CUSTEIO)
+
+    @property
+    def orcamento_executado_custeio(self):
+        return self.__orcamento_executado__(CUSTEIO)
+
+    @property
+    def orcamento_executado_capital(self):
+        return self.__orcamento_executado__(CAPITAL)
 
 
 class Curso(models.Model):
