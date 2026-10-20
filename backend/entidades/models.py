@@ -1,11 +1,13 @@
 from decimal import Decimal
 
-from despesas.models import VersaoTransacao
 from django.db import models
-from django.db.models import Case, DecimalField, F, Sum, When
-from ngo_ccsh.constrains import CAPITAL, CUSTEIO
+from django.db.models import F, Sum
+from django.db.models.functions import Coalesce
 
+from despesas.models import VersaoTransacao
 from entidades.managers import CentroManager, PessoaManager, UnidadeManager
+from ngo_ccsh.constrains import CAPITAL, CUSTEIO, FINALIDADE_TRANFERENCIA_CUSTEIO_PARA_CAPITAL, \
+    FINALIDADE_TRANFERENCIA_CAPITAL_PARA_CUSTEIO
 
 
 class CentroSIE(models.Model):
@@ -159,66 +161,56 @@ class Unidade(models.Model):
     def __str__(self) -> str:
         return self.nome_unidade
 
-    def __orcamento__(self, finalidade):
+    def _orcamento(self, natureza_finalidade):
         transactions = VersaoTransacao.objects.filter(
             transacao__versao_transacao=F("id_versao_transacao"),
-            finalidade__natureza_finalidade=finalidade,
+            finalidade__natureza_finalidade=natureza_finalidade,
             unidade_receptora=self,
-        ).aggregate(
-            montante=Sum("montante"),
-        )
-        return transactions["montante"] or Decimal("0.00")
+        ).aggregate(montante=Coalesce(Sum("montante"), Decimal("0.00")))
 
-    def __orcamento_executado__(self, finalidade):
+        montante_transferencia_entre_finalidades = VersaoTransacao.objects.filter(
+            transacao__versao_transacao=F("id_versao_transacao"),
+            finalidade=(
+                FINALIDADE_TRANFERENCIA_CUSTEIO_PARA_CAPITAL if natureza_finalidade == CUSTEIO
+                else FINALIDADE_TRANFERENCIA_CAPITAL_PARA_CUSTEIO),
+            unidade_receptora=self,
+        ).aggregate(montante=Coalesce(Sum("montante"), Decimal("0.00")))
+        montante = montante_transferencia_entre_finalidades["montante"] + transactions["montante"]
+        return montante or Decimal("0.00")
+
+    def _orcamento_executado(self, natureza_finalidade):
         transactions = VersaoTransacao.objects.filter(
             transacao__versao_transacao=F("id_versao_transacao"),
-            finalidade__natureza_finalidade=finalidade,
+            finalidade__natureza_finalidade=natureza_finalidade,
             unidade_executora=self,
             credito=False,
         ).aggregate(
-            montante=Sum("montante"),
-        )
-        return transactions["montante"] or Decimal("0.00")
-
-    def __montante_calc__(self, finalidade):
-        transactions = VersaoTransacao.objects.filter(
-            transacao__versao_transacao=F("id_versao_transacao"),
-            finalidade__natureza_finalidade=finalidade,
-        ).aggregate(
-            montante=Sum(
-                Case(
-                    When(unidade_receptora=self, then=F("montante")),
-                    When(unidade_executora=self, credito=False, then=-F("montante")),
-                    default=Decimal("0.00"),
-                ),
-                output_field=DecimalField(),
-            )
-        )
+            montante=Coalesce(Sum("montante"), Decimal("0.00")))
         return transactions["montante"] or Decimal("0.00")
 
     @property
     def saldo_custeio(self):
-        return self.__montante_calc__(CUSTEIO)
+        return self._orcamento(CUSTEIO) - self._orcamento_executado(CUSTEIO)
 
     @property
     def saldo_capital(self):
-        return self.__montante_calc__(CAPITAL)
+        return self._orcamento(CAPITAL) - self._orcamento_executado(CAPITAL)
 
     @property
     def orcamento_capital(self):
-        return self.__orcamento__(CAPITAL)
+        return self._orcamento(CAPITAL)
 
     @property
     def orcamento_custeio(self):
-        return self.__orcamento__(CUSTEIO)
+        return self._orcamento(CUSTEIO)
 
     @property
     def orcamento_executado_custeio(self):
-        return self.__orcamento_executado__(CUSTEIO)
+        return self._orcamento_executado(CUSTEIO)
 
     @property
     def orcamento_executado_capital(self):
-        return self.__orcamento_executado__(CAPITAL)
+        return self._orcamento_executado(CAPITAL)
 
 
 class Curso(models.Model):

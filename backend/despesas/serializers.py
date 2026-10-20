@@ -2,7 +2,8 @@ from django.db import transaction
 from django.db.models import F
 from django.forms.models import model_to_dict
 from entidades.models import Pessoa, Unidade
-from ngo_ccsh.constrains import CAPITAL, CUSTEIO, TRANSFERENCIA_FINALIDADES
+from ngo_ccsh.constrains import CAPITAL, CUSTEIO, TRANSFERENCIA_FINALIDADES, TRANSFERENCIA_FINALIDADES_IDR, \
+    TRANSFERENCIA_ENTRE_UNIDADES_FINALIDADES
 from rest_framework import serializers
 from rest_framework.relations import PrimaryKeyRelatedField
 
@@ -373,12 +374,16 @@ class VersaoTransacaoSerializer(serializers.ModelSerializer):
             )
 
         if not empenho:
-            if credito and not unidade_receptora:
+            if not unidade_receptora:
                 validation_errors["unidade_receptora"] = (
                     "Para realizar uma transferiência de montante é necessário uma unidade receptora."
                 )
+            if credito and finalidade.id_finalidade not in TRANSFERENCIA_FINALIDADES_IDR:
+                credito_validation_errors.append(
+                    "Esta finalidade não permite tranferência."
+                )
 
-            if finalidade.id_finalidade not in TRANSFERENCIA_FINALIDADES:
+            if not credito and finalidade.id_finalidade not in TRANSFERENCIA_ENTRE_UNIDADES_FINALIDADES:
                 credito_validation_errors.append(
                     "Esta finalidade não permite tranferência."
                 )
