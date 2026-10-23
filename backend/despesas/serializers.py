@@ -1,9 +1,8 @@
+from decimal import Decimal
+
 from django.db import transaction
 from django.db.models import F
 from django.forms.models import model_to_dict
-from entidades.models import Pessoa, Unidade
-from ngo_ccsh.constrains import CAPITAL, CUSTEIO, TRANSFERENCIA_FINALIDADES, TRANSFERENCIA_FINALIDADES_IDR, \
-    TRANSFERENCIA_ENTRE_UNIDADES_FINALIDADES
 from rest_framework import serializers
 from rest_framework.relations import PrimaryKeyRelatedField
 
@@ -19,6 +18,9 @@ from despesas.models import (
     ValorDocumento,
     VersaoTransacao,
 )
+from entidades.models import Pessoa, Unidade
+from ngo_ccsh.constrains import CAPITAL, CUSTEIO, TRANSFERENCIA_FINALIDADES_IDR, \
+    TRANSFERENCIA_ENTRE_UNIDADES_FINALIDADES, FINALIDADE_EMPENHO
 
 
 class TipoDocumentoSerializer(serializers.ModelSerializer):
@@ -159,8 +161,8 @@ class FinalidadeSerializer(serializers.ModelSerializer):
             item_registered = False
             for tipo_registered in instance.tipodocumentoparafinalidade_set.all():
                 if (
-                    item["tipo_documento"].pk
-                    == tipo_registered.tipo_documento.id_tipo_documento
+                        item["tipo_documento"].pk
+                        == tipo_registered.tipo_documento.id_tipo_documento
                 ):
                     tipo_registered.obrigatorio = item.get("obrigatorio", True)
                     tipo_registered.ativo = item.get("ativo", instance.ativo)
@@ -278,7 +280,7 @@ class VersaoTransacaoSerializer(serializers.ModelSerializer):
         finalidade = data.get("finalidade")
         documentos = data.get("documentos", [])
         documentos_id = [doc["tipo_documento"].pk for doc in documentos]
-        montante = data.get("montante", None)
+        montante = data.get("montante") or Decimal('0.00')
 
         validation_errors = {}
         documentos_validation_errors = []
@@ -346,73 +348,82 @@ class VersaoTransacaoSerializer(serializers.ModelSerializer):
         ).first()
 
         montante_unidade = 0.00
-        transacao_update_montante = transacao_update.montante if transacao_update else 0
+        transacao_update_montante = Decimal('0.00')
+        if transacao_update:
+            if transacao_update.credito:
+                transacao_update_montante = -transacao_update.montante
+            else:
+                transacao_update_montante = transacao_update.montante
 
-        if finalidade.natureza_finalidade.pk == CUSTEIO:
-            montante_unidade = (
-                unidade_executora.saldo_custeio + transacao_update_montante
-            )
-        elif finalidade.natureza_finalidade.pk == CAPITAL:
-            montante_unidade = (
-                unidade_executora.saldo_capital + transacao_update_montante
-            )
+        if not credito:
+            if finalidade.natureza_finalidade.pk == CUSTEIO:
+                montante_unidade = (
+                        unidade_executora.saldo_custeio + transacao_update_montante
+                )
+            elif finalidade.natureza_finalidade.pk == CAPITAL:
+                montante_unidade = (
+                        unidade_executora.saldo_capital + transacao_update_montante
+                )
 
-        if not credito and montante_unidade < montante:
-            montante_validation_errors.append(
-                f"O valor do montante na unidade '{unidade_executora}' é insuficiente. "
-                f"Valor do montante de {finalidade.natureza_finalidade} na unidade: {montante_unidade:.2f}."
-            )
+            if montante_unidade < montante:
+                montante_validation_errors.append(
+                    f"O valor do montante na unidade '{unidade_executora}' é insuficiente. "
+                    f"Valor do montante de {finalidade.natureza_finalidade} na unidade: {montante_unidade:.2f}."
+                )
+        else:
+            if not unidade_executora.pode_empenhar:
+                credito_validation_errors.append(
+                    "Está unidade não tem a permissão para empenhar um valor."
+                )
 
-        if credito and not unidade_executora.pode_empenhar:
-            credito_validation_errors.append(
-                "Está unidade não tem a permissão para empenhar um valor."
-            )
-
-        if empenho and unidade_receptora:
-            empenho_validation_errors.append(
-                "Não é possível fazer um empenho com uma unidade receptora escolhida."
-            )
-
+        # Transferências
         if not empenho:
             if not unidade_receptora:
                 validation_errors["unidade_receptora"] = (
-                    "Para realizar uma transferiência de montante é necessário uma unidade receptora."
+                    "Para realizar uma transferência de montante é necessário uma unidade receptora."
                 )
             if credito and finalidade.id_finalidade not in TRANSFERENCIA_FINALIDADES_IDR:
                 credito_validation_errors.append(
-                    "Esta finalidade não permite tranferência."
+                    "Esta finalidade não permite transferência de IDR."
                 )
 
             if not credito and finalidade.id_finalidade not in TRANSFERENCIA_ENTRE_UNIDADES_FINALIDADES:
                 credito_validation_errors.append(
-                    "Esta finalidade não permite tranferência."
+                    "Esta finalidade não permite transferência entre unidades."
+                )
+        else:
+            if not empenho.ativo:
+                empenho_validation_errors.append(
+                    "Não é possível criar ou modificar transações de um empenho inativo."
                 )
 
-            if montante_validation_errors:
-                validation_errors["montante"] = montante_validation_errors
+            if unidade_receptora:
+                empenho_validation_errors.append(
+                    "Não é possível fazer ou gastar de um empenho com uma unidade receptora escolhida."
+                )
 
-            if credito_validation_errors:
-                validation_errors["credito"] = credito_validation_errors
+            # empenhar valor
+            if finalidade.pk == FINALIDADE_EMPENHO:
+                if not credito:
+                    credito_validation_errors.append(
+                        "Para empenhar um valor é necessário que a transação seja de credito."
+                    )
+            # Gastar de um empenho.
+            else:
+                if credito:
+                    credito_validation_errors.append(
+                        "Para empenhar um valor é necessário que a finalidade seja de Empenho.")
+                montante_empenho = empenho.montante
 
-            if validation_errors:
-                raise serializers.ValidationError(validation_errors)
-            return data
+                if transacao_update:
+                    montante_empenho += transacao_update.montante
 
-        if not empenho.ativo:
-            empenho_validation_errors.append(
-                "Não é possível criar ou modificar transações de um empenho inativo."
-            )
+                if montante > montante_empenho:
+                    montante_validation_errors.append(
+                        f"Saldo insuficiente no empenho. O Valor da despesa (R$ {montante:.2f}) "
+                        f"é maior que o saldo atual (R$ {montante_empenho:.2f})."
+                    )
 
-        montante_empenho = empenho.montante
-
-        if transacao_update:  # Somar o valor que tinha sido subtraído.
-            montante_empenho += transacao_update.montante
-
-        if not credito and montante > montante_empenho:
-            montante_validation_errors.append(
-                f"Saldo insuficiente no empenho. O Valor da despesa (R$ {montante:.2f}) "
-                f"é maior que o saldo atual (R$ {montante_empenho:.2f})."
-            )
         if empenho_validation_errors:
             validation_errors["id_empenho"] = empenho_validation_errors
 

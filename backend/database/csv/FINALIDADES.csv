@@ -31,3 +31,10 @@ ID_FINALIDADE,ID_NATUREZA_FINALIDADE,ID_GRUPO_FINALIDADE,FINALIDADE,ATIVO
 34,2,,"Anuidades e participação institucional",TRUE
 35,2,,"Suprimento de Fundos",TRUE
 38,3,1,"(Despesas) Bolsa Monitoria PNAES",TRUE
+40,2,,"IDR(Distribuição de Recurso) Custeio", TRUE
+41,1,,"IDR(Distribuição de Recurso) Capital", TRUE
+42,2,,"Transferência de Custeio", TRUE
+43,1,,"Transferência de Capital", TRUE
+44,2,,"Transferência de Custeio para Capital", TRUE
+45,1,,"Transferência de Capital para Custeio", TRUE
+46,4,,"Empenhar", TRUE

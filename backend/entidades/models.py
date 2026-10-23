@@ -7,7 +7,8 @@ from django.db.models.functions import Coalesce
 from despesas.models import VersaoTransacao
 from entidades.managers import CentroManager, PessoaManager, UnidadeManager
 from ngo_ccsh.constrains import CAPITAL, CUSTEIO, FINALIDADE_TRANFERENCIA_CUSTEIO_PARA_CAPITAL, \
-    FINALIDADE_TRANFERENCIA_CAPITAL_PARA_CUSTEIO
+    FINALIDADE_TRANFERENCIA_CAPITAL_PARA_CUSTEIO, TRANSFERENCIA_ENTRE_UNIDADES_FINALIDADES, \
+    FINALIDADE_TRANFERENCIA_CAPITAL, FINALIDADE_TRANSFERENCIA_CUSTEIO
 
 
 class CentroSIE(models.Model):
@@ -162,20 +163,30 @@ class Unidade(models.Model):
         return self.nome_unidade
 
     def _orcamento(self, natureza_finalidade):
-        transactions = VersaoTransacao.objects.filter(
+        entradas = VersaoTransacao.objects.filter(
             transacao__versao_transacao=F("id_versao_transacao"),
             finalidade__natureza_finalidade=natureza_finalidade,
             unidade_receptora=self,
-        ).aggregate(montante=Coalesce(Sum("montante"), Decimal("0.00")))
+        ).exclude(finalidade__in=TRANSFERENCIA_ENTRE_UNIDADES_FINALIDADES).aggregate(montante=Coalesce(Sum("montante"), Decimal("0.00")))
 
-        montante_transferencia_entre_finalidades = VersaoTransacao.objects.filter(
+        transferencias_recebidas = VersaoTransacao.objects.filter(
             transacao__versao_transacao=F("id_versao_transacao"),
-            finalidade=(
-                FINALIDADE_TRANFERENCIA_CUSTEIO_PARA_CAPITAL if natureza_finalidade == CUSTEIO
-                else FINALIDADE_TRANFERENCIA_CAPITAL_PARA_CUSTEIO),
+            finalidade__in=(
+                [FINALIDADE_TRANFERENCIA_CUSTEIO_PARA_CAPITAL, FINALIDADE_TRANFERENCIA_CAPITAL] if natureza_finalidade == CAPITAL
+                else [FINALIDADE_TRANFERENCIA_CAPITAL_PARA_CUSTEIO, FINALIDADE_TRANSFERENCIA_CUSTEIO]),
             unidade_receptora=self,
         ).aggregate(montante=Coalesce(Sum("montante"), Decimal("0.00")))
-        montante = montante_transferencia_entre_finalidades["montante"] + transactions["montante"]
+
+        transferencias_enviadas = VersaoTransacao.objects.filter(
+            transacao__versao_transacao=F("id_versao_transacao"),
+            finalidade__in=(
+                [FINALIDADE_TRANFERENCIA_CUSTEIO_PARA_CAPITAL, FINALIDADE_TRANSFERENCIA_CUSTEIO] if natureza_finalidade == CUSTEIO
+                else [FINALIDADE_TRANFERENCIA_CAPITAL_PARA_CUSTEIO, FINALIDADE_TRANFERENCIA_CAPITAL]),
+            unidade_executora=self,
+        ).aggregate(montante=Coalesce(Sum("montante"), Decimal("0.00")))
+        montante = transferencias_recebidas["montante"] + entradas["montante"] - transferencias_enviadas[
+            'montante']
+
         return montante or Decimal("0.00")
 
     def _orcamento_executado(self, natureza_finalidade):
@@ -184,6 +195,8 @@ class Unidade(models.Model):
             finalidade__natureza_finalidade=natureza_finalidade,
             unidade_executora=self,
             credito=False,
+        ).exclude(
+            finalidade__in=TRANSFERENCIA_ENTRE_UNIDADES_FINALIDADES
         ).aggregate(
             montante=Coalesce(Sum("montante"), Decimal("0.00")))
         return transactions["montante"] or Decimal("0.00")
