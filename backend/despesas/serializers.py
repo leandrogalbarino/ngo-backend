@@ -1,11 +1,5 @@
 from decimal import Decimal
 
-from django.db import transaction
-from django.db.models import F
-from django.forms.models import model_to_dict
-from rest_framework import serializers
-from rest_framework.relations import PrimaryKeyRelatedField
-
 from despesas.models import (
     Empenho,
     Finalidade,
@@ -18,9 +12,19 @@ from despesas.models import (
     ValorDocumento,
     VersaoTransacao,
 )
+from django.db import transaction
+from django.db.models import F
+from django.forms.models import model_to_dict
 from entidades.models import Pessoa, Unidade
-from ngo_ccsh.constrains import CAPITAL, CUSTEIO, TRANSFERENCIA_FINALIDADES_IDR, \
-    TRANSFERENCIA_ENTRE_UNIDADES_FINALIDADES, FINALIDADE_EMPENHO
+from ngo_ccsh.constrains import (
+    CAPITAL,
+    CUSTEIO,
+    FINALIDADE_EMPENHO,
+    TRANSFERENCIA_ENTRE_UNIDADES_FINALIDADES,
+    TRANSFERENCIA_FINALIDADES_IDR,
+)
+from rest_framework import serializers
+from rest_framework.relations import PrimaryKeyRelatedField
 
 
 class TipoDocumentoSerializer(serializers.ModelSerializer):
@@ -161,8 +165,8 @@ class FinalidadeSerializer(serializers.ModelSerializer):
             item_registered = False
             for tipo_registered in instance.tipodocumentoparafinalidade_set.all():
                 if (
-                        item["tipo_documento"].pk
-                        == tipo_registered.tipo_documento.id_tipo_documento
+                    item["tipo_documento"].pk
+                    == tipo_registered.tipo_documento.id_tipo_documento
                 ):
                     tipo_registered.obrigatorio = item.get("obrigatorio", True)
                     tipo_registered.ativo = item.get("ativo", instance.ativo)
@@ -280,13 +284,16 @@ class VersaoTransacaoSerializer(serializers.ModelSerializer):
         finalidade = data.get("finalidade")
         documentos = data.get("documentos", [])
         documentos_id = [doc["tipo_documento"].pk for doc in documentos]
-        montante = data.get("montante") or Decimal('0.00')
+        montante = data.get("montante") or Decimal("0.00")
 
         validation_errors = {}
         documentos_validation_errors = []
         montante_validation_errors = []
         empenho_validation_errors = []
         credito_validation_errors = []
+        finalidade_validation_errors = []
+        unidade_executora_validation_errors = []
+        unidade_receptora_validation_errors = []
 
         if not montante:
             montante_validation_errors.append("O montante é obrigatório.")
@@ -332,14 +339,11 @@ class VersaoTransacaoSerializer(serializers.ModelSerializer):
                     }
                 )
 
-        if documentos_validation_errors:
-            validation_errors["documentos"] = documentos_validation_errors
-
         # montante
         id_transacao = data.get("id_transacao")
         unidade_executora = data.get("unidade_executora")
         unidade_receptora = data.get("unidade_receptora")
-        empenho = data.get("empenho", None)
+        empenho = data.get("empenho")
         credito = data.get("credito")
 
         transacao_update = VersaoTransacao.objects.filter(
@@ -347,8 +351,8 @@ class VersaoTransacaoSerializer(serializers.ModelSerializer):
             transacao__versao_transacao=F("id_versao_transacao"),
         ).first()
 
-        montante_unidade = 0.00
-        transacao_update_montante = Decimal('0.00')
+        montante_unidade = Decimal("0.00")
+        transacao_update_montante = Decimal("0.00")
         if transacao_update:
             if transacao_update.credito:
                 transacao_update_montante = -transacao_update.montante
@@ -358,11 +362,15 @@ class VersaoTransacaoSerializer(serializers.ModelSerializer):
         if not credito:
             if finalidade.natureza_finalidade.pk == CUSTEIO:
                 montante_unidade = (
-                        unidade_executora.saldo_custeio + transacao_update_montante
+                    unidade_executora.saldo_custeio + transacao_update_montante
                 )
             elif finalidade.natureza_finalidade.pk == CAPITAL:
                 montante_unidade = (
-                        unidade_executora.saldo_capital + transacao_update_montante
+                    unidade_executora.saldo_capital + transacao_update_montante
+                )
+            else:
+                finalidade_validation_errors.append(
+                    "Está natureza não pode realizar uma transação no momento."
                 )
 
             if montante_unidade < montante:
@@ -372,7 +380,7 @@ class VersaoTransacaoSerializer(serializers.ModelSerializer):
                 )
         else:
             if not unidade_executora.pode_empenhar:
-                credito_validation_errors.append(
+                unidade_executora_validation_errors.append(
                     "Está unidade não tem a permissão para empenhar um valor."
                 )
 
@@ -382,13 +390,20 @@ class VersaoTransacaoSerializer(serializers.ModelSerializer):
                 validation_errors["unidade_receptora"] = (
                     "Para realizar uma transferência de montante é necessário uma unidade receptora."
                 )
-            if credito and finalidade.id_finalidade not in TRANSFERENCIA_FINALIDADES_IDR:
-                credito_validation_errors.append(
+            if (
+                credito
+                and finalidade.id_finalidade not in TRANSFERENCIA_FINALIDADES_IDR
+            ):
+                finalidade_validation_errors.append(
                     "Esta finalidade não permite transferência de IDR."
                 )
 
-            if not credito and finalidade.id_finalidade not in TRANSFERENCIA_ENTRE_UNIDADES_FINALIDADES:
-                credito_validation_errors.append(
+            if (
+                not credito
+                and finalidade.id_finalidade
+                not in TRANSFERENCIA_ENTRE_UNIDADES_FINALIDADES
+            ):
+                finalidade_validation_errors.append(
                     "Esta finalidade não permite transferência entre unidades."
                 )
         else:
@@ -398,8 +413,8 @@ class VersaoTransacaoSerializer(serializers.ModelSerializer):
                 )
 
             if unidade_receptora:
-                empenho_validation_errors.append(
-                    "Não é possível fazer ou gastar de um empenho com uma unidade receptora escolhida."
+                unidade_receptora_validation_errors.append(
+                    "Não é possível executar ou gastar de um empenho com uma unidade receptora escolhida."
                 )
 
             # empenhar valor
@@ -411,18 +426,24 @@ class VersaoTransacaoSerializer(serializers.ModelSerializer):
             # Gastar de um empenho.
             else:
                 if credito:
-                    credito_validation_errors.append(
-                        "Para empenhar um valor é necessário que a finalidade seja de Empenho.")
-                montante_empenho = empenho.montante
-
-                if transacao_update:
-                    montante_empenho += transacao_update.montante
-
-                if montante > montante_empenho:
-                    montante_validation_errors.append(
-                        f"Saldo insuficiente no empenho. O Valor da despesa (R$ {montante:.2f}) "
-                        f"é maior que o saldo atual (R$ {montante_empenho:.2f})."
+                    finalidade_validation_errors.append(
+                        "Para empenhar um valor é necessário que a "
+                        "finalidade seja de Empenho."
                     )
+                else:
+                    montante_empenho = empenho.montante
+
+                    if transacao_update:
+                        montante_empenho += transacao_update_montante
+
+                    if montante > montante_empenho:
+                        montante_validation_errors.append(
+                            f"Saldo insuficiente no empenho. O Valor da despesa (R$ {montante:.2f}) "
+                            f"é maior que o saldo atual (R$ {montante_empenho:.2f})."
+                        )
+
+        if documentos_validation_errors:
+            validation_errors["documentos"] = documentos_validation_errors
 
         if empenho_validation_errors:
             validation_errors["id_empenho"] = empenho_validation_errors
@@ -433,9 +454,17 @@ class VersaoTransacaoSerializer(serializers.ModelSerializer):
         if credito_validation_errors:
             validation_errors["credito"] = credito_validation_errors
 
+        if finalidade_validation_errors:
+            validation_errors["finalidade"] = finalidade_validation_errors
+
+        if unidade_receptora_validation_errors:
+            validation_errors["unidade_receptora"] = unidade_receptora_validation_errors
+
+        if unidade_executora_validation_errors:
+            validation_errors["unidade_executora"] = unidade_executora_validation_errors
+
         if validation_errors:
             raise serializers.ValidationError(validation_errors)
-
         return data
 
     def create(self, validated_data):

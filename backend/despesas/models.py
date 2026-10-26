@@ -274,7 +274,7 @@ class VersaoTransacao(models.Model):
         null=True,
         blank=True,
         related_name="+",
-        db_column="id_unidade_credora",
+        db_column="id_unidade_receptora",
     )
 
     unidade_executora = models.ForeignKey(

@@ -103,7 +103,6 @@ class Command(BaseCommand):
                             field = field_objects[attr_name]
 
                             new_row[attr_name] = self.convert_value(field, value)
-
                         model.objects.create(**new_row)
 
                 pbar.update(1)
