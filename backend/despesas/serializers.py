@@ -1,10 +1,9 @@
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
-from rest_framework import serializers
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema_field
-
 from entidades.models import Centro, Pessoa, Unidade
+from rest_framework import serializers
 
 from . import saldos, services
 from .models import (
@@ -42,6 +41,18 @@ class TipoDocumentoSerializer(serializers.ModelSerializer):
         read_only_fields = ["id_tipo_documento"]
 
 
+class TipoDadoDocumentoSerializer(serializers.ModelSerializer):
+    tipos_dado = serializers.SerializerMethodField()
+    _TIPOS_DADO_CHOICES = [choice.value for choice in TipoDocumento.TipoDado]
+
+    class Meta:
+        model = TipoDocumento
+        fields = ["tipos_dado"]
+
+    def get_tipos_dado(self, obj):
+        return self._TIPOS_DADO_CHOICES
+
+
 class TipoMovimentoSerializer(serializers.ModelSerializer):
     class Meta:
         model = TipoMovimento
@@ -53,14 +64,14 @@ class TipoDocumentoParaFinalidadeSerializer(serializers.ModelSerializer):
     id_tipo_documento = serializers.PrimaryKeyRelatedField(
         queryset=TipoDocumento.objects.all(), source="tipo_documento"
     )
-    tipo_documento = serializers.CharField(
-        source="tipo_documento.nome", read_only=True
-    )
+    tipo_documento = serializers.CharField(source="tipo_documento.nome", read_only=True)
+
+    ativo = serializers.BooleanField(default=True, required=False)
+    obrigatorio = serializers.BooleanField(default=False, required=False)
 
     class Meta:
         model = TipoDocumentoParaFinalidade
         fields = [
-            "id_tipo_documento_para_finalidade",
             "id_tipo_documento",
             "tipo_documento",
             "obrigatorio",
@@ -116,20 +127,35 @@ class FinalidadeSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         links = validated_data.pop("tipodocumentoparafinalidade_set", None)
         instance = super().update(instance, validated_data)
+
         if links is not None:
-            retained_ids = {link["tipo_documento"].pk for link in links}
-            instance.tipodocumentoparafinalidade_set.exclude(
-                tipo_documento_id__in=retained_ids
-            ).update(ativo=False)
+            fields_errors = []
+            all_fields_sum = 0
             for link in links:
-                TipoDocumentoParaFinalidade.objects.update_or_create(
-                    finalidade=instance,
-                    tipo_documento=link["tipo_documento"],
-                    defaults={
-                        "obrigatorio": link["obrigatorio"],
-                        "ativo": link["ativo"],
-                    },
-                )
+                tipo_documento = link.get("tipo_documento", None)
+                if not tipo_documento:
+                    fields_errors.append(
+                        {
+                            "id_tipo_documento": "Informe o campo para atualizar ou adicionar."
+                        }
+                    )
+                    all_fields_sum += 1
+                else:
+                    fields_errors.append({})
+                    TipoDocumentoParaFinalidade.objects.update_or_create(
+                        finalidade=instance,
+                        tipo_documento=link["tipo_documento"],
+                        defaults={
+                            "obrigatorio": link.get("obrigatorio", True),
+                            "ativo": link.get("ativo", True),
+                        },
+                    )
+
+            if all_fields_sum > 0:
+                errors = []
+                for i, field_error in enumerate(fields_errors):
+                    errors.append({i: field_error})
+                raise serializers.ValidationError({"tipos_documentos": errors})
         return instance
 
 
@@ -170,7 +196,13 @@ class EmpenhoSerializer(serializers.ModelSerializer):
             "gasto",
             "a_complementar",
         ]
-        read_only_fields = ["id_empenho", "criado_em", "saldo", "gasto", "a_complementar"]
+        read_only_fields = [
+            "id_empenho",
+            "criado_em",
+            "saldo",
+            "gasto",
+            "a_complementar",
+        ]
 
     @extend_schema_field(OpenApiTypes.DECIMAL)
     def get_saldo(self, obj):
@@ -216,14 +248,18 @@ class ValorDocumentoSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ValorDocumento
-        fields = ["id_valor_documento", "id_tipo_documento", "tipo_documento", "ordem", "valor"]
+        fields = [
+            "id_valor_documento",
+            "id_tipo_documento",
+            "tipo_documento",
+            "ordem",
+            "valor",
+        ]
 
 
 class TransacaoReadSerializer(serializers.ModelSerializer):
     id_usuario = serializers.IntegerField(source="usuario_id", read_only=True)
-    id_beneficiario = serializers.IntegerField(
-        source="beneficiario_id", read_only=True
-    )
+    id_beneficiario = serializers.IntegerField(source="beneficiario_id", read_only=True)
     id_transacao_corrigida = serializers.IntegerField(
         source="corrige_id", read_only=True
     )
@@ -307,7 +343,12 @@ class TransacaoOperationSerializer(serializers.Serializer):
     def validate(self, attrs):
         operacao = attrs["operacao"]
         required_by_operation = {
-            Transacao.Operacao.CREDITO: ("centro", "ano_fiscal", "natureza", "montante"),
+            Transacao.Operacao.CREDITO: (
+                "centro",
+                "ano_fiscal",
+                "natureza",
+                "montante",
+            ),
             Transacao.Operacao.REFORCO: ("empenho", "montante"),
             Transacao.Operacao.DISTRIBUICAO: (
                 "centro",
@@ -343,7 +384,10 @@ class TransacaoOperationSerializer(serializers.Serializer):
         ]
         if missing:
             raise serializers.ValidationError(
-                {field: "Este campo é obrigatório para esta operação." for field in missing}
+                {
+                    field: "Este campo é obrigatório para esta operação."
+                    for field in missing
+                }
             )
         return attrs
 
@@ -417,7 +461,9 @@ class TransacaoOperationSerializer(serializers.Serializer):
                 **kwargs,
             )
         except (DjangoValidationError, services.RegraDeNegocio) as exc:
-            detail = exc.messages if isinstance(exc, DjangoValidationError) else str(exc)
+            detail = (
+                exc.messages if isinstance(exc, DjangoValidationError) else str(exc)
+            )
             raise serializers.ValidationError(detail) from exc
 
 
@@ -478,5 +524,7 @@ class TransacaoCorrecaoSerializer(serializers.Serializer):
                 **correction_args,
             )
         except (DjangoValidationError, services.RegraDeNegocio) as exc:
-            detail = exc.messages if isinstance(exc, DjangoValidationError) else str(exc)
+            detail = (
+                exc.messages if isinstance(exc, DjangoValidationError) else str(exc)
+            )
             raise serializers.ValidationError(detail) from exc

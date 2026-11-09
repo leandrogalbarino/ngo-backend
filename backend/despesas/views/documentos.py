@@ -1,12 +1,22 @@
+from despesas.filters import TipoDocumentoFilterSet
+from despesas.models import Lancamento, TipoDocumento, Transacao, ValorDocumento
+from despesas.serializers import (
+    LancamentoSerializer,
+    TipoDadoDocumentoSerializer,
+    TipoDocumentoSerializer,
+    ValorDocumentoSerializer,
+)
+from despesas.views.ativoUtil import AtivoListDefaultMixin
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import viewsets
 from rest_framework.exceptions import NotFound
 from rest_framework.filters import OrderingFilter
 
-from despesas.filters import TipoDocumentoFilterSet
-from despesas.models import Lancamento, TipoDocumento, Transacao, ValorDocumento
-from despesas.serializers import LancamentoSerializer, TipoDocumentoSerializer, ValorDocumentoSerializer
-from despesas.views.ativoUtil import AtivoListDefaultMixin
+
+class TipoDadoDocumentoViewSet(viewsets.ModelViewSet):
+    queryset = TipoDocumento.objects.all()
+    serializer_class = TipoDadoDocumentoSerializer
+    http_method_names = ["get"]
 
 
 class TipoDocumentoViewSet(AtivoListDefaultMixin, viewsets.ModelViewSet):
