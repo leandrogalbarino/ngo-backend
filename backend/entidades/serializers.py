@@ -1,6 +1,6 @@
 from django.core.exceptions import ValidationError
-from rest_framework import serializers
 from drf_spectacular.utils import extend_schema_field
+from rest_framework import serializers
 
 from entidades.models import (
     Cargo,
@@ -145,9 +145,12 @@ class TelefoneSerializer(serializers.ModelSerializer):
 
 
 class EmailSerializer(serializers.ModelSerializer):
+    id_pessoa_interna = serializers.PrimaryKeyRelatedField(queryset=Pessoa.objects.all(), source="pessoa")
+    nome_pessoa = serializers.CharField(source="pessoa.nome_pessoa", read_only=True)
+
     class Meta:
         model = Email
-        fields = "__all__"
+        fields = ["id_email", "id_pessoa_interna", "nome_pessoa", "email"]
 
 
 class TelefonePessoaSerializer(serializers.ModelSerializer):
