@@ -22,6 +22,7 @@ from despesas.views.finalidades import (
 )
 from despesas.views.transacoes import (
     TipoMovimentoViewSet,
+    TransacaoOperationViewSet,
     TransacoesViewSet,
 )
 
@@ -34,9 +35,6 @@ router.register(
     "finalidades/grupos", GrupoFinalidadeViewSet, basename="grupos_finalidades"
 )
 router.register("finalidades", FinalidadeViewSet, basename="finalidades")
-router.register(
-    "tipos-documentos/tipos-dado", TipoDadoDocumentoViewSet, basename="tipos_dado"
-)
 router.register("tipos-documentos", TipoDocumentoViewSet, basename="tipos_documentos")
 
 
@@ -57,4 +55,17 @@ transacao_router.register(
 transacao_router.register(
     r"lancamentos", LancamentoViewSet, basename="transacao-lancamentos"
 )
-urlpatterns = [path("", include(router.urls)), path("", include(transacao_router.urls))]
+urlpatterns = [
+    path(
+        "tipos-documentos/formato/",
+        TipoDadoDocumentoViewSet.as_view(),
+        name="tipos_dado",
+    ),
+    path(
+        "transacoes/operacoes/",
+        TransacaoOperationViewSet.as_view(),
+        name="tipos_dado",
+    ),
+    path("", include(router.urls)),
+    path("", include(transacao_router.urls)),
+]

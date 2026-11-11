@@ -41,16 +41,13 @@ class TipoDocumentoSerializer(serializers.ModelSerializer):
         read_only_fields = ["id_tipo_documento"]
 
 
-class TipoDadoDocumentoSerializer(serializers.ModelSerializer):
-    tipos_dado = serializers.SerializerMethodField()
-    _TIPOS_DADO_CHOICES = [choice.value for choice in TipoDocumento.TipoDado]
-
-    class Meta:
-        model = TipoDocumento
-        fields = ["tipos_dado"]
-
-    def get_tipos_dado(self, obj):
-        return self._TIPOS_DADO_CHOICES
+class TipoDadoDocumentoSerializer(serializers.Serializer):
+    default = serializers.ReadOnlyField(
+        default=[
+            {"id_tipo_dado": index, "rotulo": item[1], "valor": item[0]}
+            for index, item in enumerate(TipoDocumento.TipoDado.choices)
+        ]
+    )
 
 
 class TipoMovimentoSerializer(serializers.ModelSerializer):
@@ -255,6 +252,15 @@ class ValorDocumentoSerializer(serializers.ModelSerializer):
             "ordem",
             "valor",
         ]
+
+
+class OperationTransacaoDataSerializer(serializers.Serializer):
+    tipos_operacao = serializers.ReadOnlyField(
+        default=[
+            {"id_operacao": index, "rotulo": item[1], "valor": item[0]}
+            for index, item in enumerate(Transacao.Operacao.choices)
+        ]
+    )
 
 
 class TransacaoReadSerializer(serializers.ModelSerializer):

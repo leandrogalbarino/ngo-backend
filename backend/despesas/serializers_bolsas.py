@@ -1,4 +1,5 @@
 from django.core.exceptions import ValidationError as DjangoValidationError
+from entidades.models import Centro, Pessoa, Unidade
 from rest_framework import serializers
 
 from despesas import services
@@ -10,20 +11,32 @@ from despesas.models import (
     ParcelaBolsa,
     VinculoBolsa,
 )
-from entidades.models import Centro, Pessoa, Unidade
 
 
 class VinculoBolsaSerializer(serializers.ModelSerializer):
-    bolsista = serializers.PrimaryKeyRelatedField(queryset=Pessoa.objects.all())
-    unidade = serializers.PrimaryKeyRelatedField(queryset=Unidade.objects.all())
-    finalidade = serializers.PrimaryKeyRelatedField(queryset=Finalidade.objects.all())
+    id_bolsista = serializers.PrimaryKeyRelatedField(
+        queryset=Pessoa.objects.all(), source="bolsista"
+    )
+    id_unidade = serializers.PrimaryKeyRelatedField(
+        queryset=Unidade.objects.all(), source="unidade"
+    )
+    id_finalidade = serializers.PrimaryKeyRelatedField(
+        queryset=Finalidade.objects.all(), source="finalidade"
+    )
+
+    bolsista = serializers.StringRelatedField(read_only=True)
+    unidade = serializers.StringRelatedField(read_only=True)
+    finalidade = serializers.StringRelatedField(read_only=True)
 
     class Meta:
         model = VinculoBolsa
         fields = [
             "id_vinculo_bolsa",
+            "id_bolsista",
             "bolsista",
+            "id_unidade",
             "unidade",
+            "id_finalidade",
             "finalidade",
             "valor_mensal",
             "inicio",
@@ -85,7 +98,9 @@ class ParcelaAlocacaoSerializer(serializers.Serializer):
                 parcela, self.validated_data.get("empenho_previsto")
             )
         except (DjangoValidationError, services.RegraDeNegocio) as exc:
-            detail = exc.messages if isinstance(exc, DjangoValidationError) else str(exc)
+            detail = (
+                exc.messages if isinstance(exc, DjangoValidationError) else str(exc)
+            )
             raise serializers.ValidationError(detail) from exc
 
 
@@ -140,7 +155,9 @@ class ListaSIAFIIncluirParcelasSerializer(serializers.Serializer):
         try:
             return services.incluir_parcelas(lista, self.validated_data["parcelas"])
         except (DjangoValidationError, services.RegraDeNegocio) as exc:
-            detail = exc.messages if isinstance(exc, DjangoValidationError) else str(exc)
+            detail = (
+                exc.messages if isinstance(exc, DjangoValidationError) else str(exc)
+            )
             raise serializers.ValidationError(detail) from exc
 
 
@@ -168,7 +185,9 @@ class ListaSIAFIPagamentoSerializer(serializers.Serializer):
                 )
             if parcela.pk in divisoes:
                 raise serializers.ValidationError(
-                    {"divisoes": f"A parcela {parcela.pk} foi informada mais de uma vez."}
+                    {
+                        "divisoes": f"A parcela {parcela.pk} foi informada mais de uma vez."
+                    }
                 )
             divisoes[parcela.pk] = [
                 (parte["empenho"], parte["valor"]) for parte in entry["partes"]
@@ -181,7 +200,9 @@ class ListaSIAFIPagamentoSerializer(serializers.Serializer):
                 divisoes=divisoes,
             )
         except (DjangoValidationError, services.RegraDeNegocio) as exc:
-            detail = exc.messages if isinstance(exc, DjangoValidationError) else str(exc)
+            detail = (
+                exc.messages if isinstance(exc, DjangoValidationError) else str(exc)
+            )
             raise serializers.ValidationError(detail) from exc
 
 

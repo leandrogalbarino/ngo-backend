@@ -1,16 +1,17 @@
-from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework import status, viewsets
-from rest_framework.decorators import action
-from rest_framework.filters import OrderingFilter
-from rest_framework.response import Response
-
 from despesas.models import TipoMovimento, Transacao
 from despesas.serializers import (
+    OperationTransacaoDataSerializer,
     TipoMovimentoSerializer,
     TransacaoCorrecaoSerializer,
     TransacaoOperationSerializer,
     TransacaoReadSerializer,
 )
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework import status, viewsets
+from rest_framework.decorators import action
+from rest_framework.filters import OrderingFilter
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
 
 class TransacoesViewSet(viewsets.ModelViewSet):
@@ -52,3 +53,10 @@ class TransacoesViewSet(viewsets.ModelViewSet):
 class TipoMovimentoViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = TipoMovimento.objects.all().order_by("id_tipo_movimento")
     serializer_class = TipoMovimentoSerializer
+
+
+class TransacaoOperationViewSet(APIView):
+    def get(self, request):
+        serializer = OperationTransacaoDataSerializer(data={})
+        serializer.is_valid(raise_exception=True)
+        return Response(serializer.data)
