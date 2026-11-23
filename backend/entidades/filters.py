@@ -22,7 +22,9 @@ class UnidadeFilterSet(FilterSet):
     id_situacao_unidade = NumberFilter(field_name="situacao_unidade_id")
 
     def filter_categories(self, queryset, name, value):
-        categories = [category.strip() for category in value.split(",") if category.strip()]
+        categories = [
+            category.strip() for category in value.split(",") if category.strip()
+        ]
         if not categories:
             return queryset
 
