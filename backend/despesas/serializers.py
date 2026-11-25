@@ -47,7 +47,7 @@ class TipoDadoDocumentoItemSerializer(serializers.Serializer):
 
 
 class TipoDadoDocumentoSerializer(serializers.Serializer):
-    data = TipoDadoDocumentoItemSerializer(many=True)
+    data = TipoDadoDocumentoItemSerializer(many=True, read_only=True)
 
     def to_representation(self, instance):
         return {
@@ -296,7 +296,7 @@ class OperationTransacaoDataSerializer(serializers.Serializer):
         default=[
             {"nome": item[1], "codigo": item[0]}
             for index, item in enumerate(Transacao.Operacao.choices)
-        ]
+        ],
     )
 
 
