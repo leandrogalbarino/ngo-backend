@@ -188,7 +188,7 @@ def empenhado_centro(centro, ano_fiscal, natureza) -> Decimal:
     return _soma(
         Lancamento.objects.filter(
             centro=centro,
-            transacao__operacao="reforco",
+            transacao__operacao=Transacao.Operacao.REFORCO,
             ano_fiscal=ano_fiscal,
             natureza=natureza,
             empenho__isnull=False,
