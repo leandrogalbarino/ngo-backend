@@ -166,12 +166,7 @@ def gasto_centro(centro, ano_fiscal, natureza) -> Decimal:
     gastos_contabilizados = -_soma(
         lancamentos.filter(tipo_movimento__conta_como_gasto=True)
     )
-    distribuido = _soma(
-        lancamentos.filter(
-            tipo_movimento__codigo=TipoMovimento.Codigo.DISTRIBUICAO,
-            unidade__isnull=False,
-        )
-    )
+
     conversao_saida = -_soma(
         lancamentos.filter(
             tipo_movimento__codigo=TipoMovimento.Codigo.CONVERSAO_NATUREZA,
@@ -185,14 +180,15 @@ def gasto_centro(centro, ano_fiscal, natureza) -> Decimal:
         )
     )
 
-    return gastos_contabilizados + distribuido + conversao_saida + transporte_saida
+    return gastos_contabilizados + conversao_saida + transporte_saida
 
 
 def empenhado_centro(centro, ano_fiscal, natureza) -> Decimal:
-    """Soma dos saldos de todos os empenhos do centro naquele ano e natureza."""
+    """Soma dos saldos de todos os empenhos do centro naquele ano e natureza que são reforços."""
     return _soma(
         Lancamento.objects.filter(
             centro=centro,
+            transacao__operacao="reforco",
             ano_fiscal=ano_fiscal,
             natureza=natureza,
             empenho__isnull=False,

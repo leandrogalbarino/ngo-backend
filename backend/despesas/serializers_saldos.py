@@ -29,9 +29,7 @@ class CentroSaldoSerializer(serializers.Serializer):
     saldo = serializers.DecimalField(max_digits=15, decimal_places=2)
     saldo_projetado = serializers.DecimalField(max_digits=15, decimal_places=2)
     distribuido_unidades = serializers.DecimalField(max_digits=15, decimal_places=2)
-    nao_distribuido_unidades = serializers.DecimalField(
-        max_digits=15, decimal_places=2
-    )
+    nao_distribuido_unidades = serializers.DecimalField(max_digits=15, decimal_places=2)
 
 
 class CentroComSaldoSerializer(CentroSerializer):
@@ -91,8 +89,11 @@ def _saldos_centro(centro: Centro, ano_fiscal: int):
     resultado = []
     for natureza in _naturezas():
         orcamento = saldos.orcamento_centro(centro.pk, ano_fiscal, natureza.pk)
+
         gasto = saldos.gasto_centro(centro.pk, ano_fiscal, natureza.pk)
+
         empenhado = saldos.empenhado_centro(centro.pk, ano_fiscal, natureza.pk)
+
         distribuido = saldos.distribuido_unidades_centro(
             centro.pk, ano_fiscal, natureza.pk
         )
@@ -102,9 +103,10 @@ def _saldos_centro(centro: Centro, ano_fiscal: int):
                 "natureza": natureza.nome,
                 "orcamento": _valor(orcamento),
                 "gasto": _valor(gasto),
-                "empenhado": _valor(empenhado),
                 "saldo": _valor(orcamento - gasto),
                 "saldo_projetado": _valor(orcamento - gasto - empenhado),
+                "empenhado": _valor(empenhado),
+                "nao_empenhado": _valor(orcamento - empenhado),
                 "distribuido_unidades": _valor(distribuido),
                 "nao_distribuido_unidades": _valor(orcamento - distribuido),
             }
