@@ -429,6 +429,7 @@ class TransacaoOperationSerializer(serializers.Serializer):
             Transacao.Operacao.DESPESA: (
                 "empenho",
                 "finalidade",
+                "unidade",
                 "montante",
             ),
             Transacao.Operacao.ANULACAO: ("empenho", "montante"),
