@@ -109,7 +109,7 @@ def _saldos_centro(centro: Centro, ano_fiscal: int):
                 "orcamento": _valor(orcamento),
                 "gasto": _valor(gasto),
                 "saldo": _valor(orcamento - gasto),
-                "saldo_projetado": _valor(orcamento - empenhado - gastos_previstos),
+                "saldo_projetado": _valor(orcamento - gasto - gastos_previstos),
                 "empenhado": _valor(empenhado),
                 "gastos_previstos": _valor(gastos_previstos),
                 "nao_empenhado": _valor(

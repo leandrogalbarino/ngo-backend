@@ -5,7 +5,7 @@ from django.urls import reverse
 from rest_framework.test import APIClient
 
 from despesas import services
-from despesas.services import TRANSPORTAR, DestinoSaldo
+from despesas.services import SaldoInsuficiente, TRANSPORTAR, DestinoSaldo
 from despesas.models import (
     ListaSIAFI,
     ParcelaBolsa,
@@ -138,11 +138,13 @@ class TransactionApiTests(BaseRazao):
         self.assertEqual(custeio["gasto"], "70.00")
         self.assertEqual(custeio["empenhado"], "130.00")
         self.assertEqual(custeio["saldo"], "230.00")
-        self.assertEqual(custeio["saldo_projetado"], "170.00")
+        self.assertEqual(custeio["saldo_projetado"], "230.00")
         self.assertEqual(custeio["nao_empenhado"], "150.00")
         self.assertEqual(
             Decimal(custeio["saldo_projetado"]),
-            Decimal(custeio["orcamento"]) - Decimal(custeio["empenhado"]),
+            Decimal(custeio["orcamento"])
+            - Decimal(custeio["gasto"])
+            - Decimal(custeio["gastos_previstos"]),
         )
         self.assertEqual(custeio["distribuido_unidades"], "100.00")
         self.assertEqual(custeio["nao_distribuido_unidades"], "200.00")
@@ -160,26 +162,33 @@ class TransactionApiTests(BaseRazao):
         self.assertEqual(capital["gasto"], "0.00")
         self.assertEqual(capital["empenhado"], "20.00")
         self.assertEqual(capital["saldo"], "20.00")
-        self.assertEqual(capital["saldo_projetado"], "0.00")
+        self.assertEqual(capital["saldo_projetado"], "20.00")
         self.assertEqual(capital["distribuido_unidades"], "0.00")
         self.assertEqual(capital["nao_distribuido_unidades"], "20.00")
 
-    def test_saldo_projetado_excludes_unpaid_scholarship_commitments(self):
+    def test_saldo_projetado_subtracts_paid_and_unpaid_scholarship_expenses(self):
         self.creditar(6500)
         empenho = self.novo_empenho("001", self.bolsa2a)
-        services.reforcar_empenho(empenho, 5050, self.usuario)
+        services.reforcar_empenho(empenho, 5100, self.usuario)
         self.distribuir(self.A, 5100)
-        services.registrar_despesa(empenho, self.A, self.bolsa2a, 5000, self.usuario)
         vinculo = VinculoBolsa.objects.create(
             bolsista=self.bolsista(),
             unidade=self.A,
             finalidade=self.bolsa2a,
-            valor_mensal=Decimal("100"),
+            valor_mensal=Decimal("5000"),
             inicio=dt.date(2026, 7, 1),
             fim=dt.date(2026, 8, 1),
         )
-        parcela_alocada, parcela_prevista = services.gerar_parcelas(vinculo)
-        services.alocar_parcela(parcela_alocada, empenho)
+        parcela_paga, parcela_prevista = services.gerar_parcelas(vinculo)
+        services.alocar_parcela(parcela_paga, empenho)
+        lista = services.criar_lista(self.centro, parcela_paga.competencia)
+        services.incluir_parcelas(lista, [parcela_paga])
+        services.pagar_lista(lista, self.usuario, "2026LS000123")
+
+        with self.assertRaises(SaldoInsuficiente):
+            services.alocar_parcela(parcela_prevista, empenho)
+        parcela_prevista.refresh_from_db()
+        self.assertEqual(parcela_prevista.status, ParcelaBolsa.Status.PREVISTA)
 
         response = self.api.get(
             reverse("despesas:centros-list"),
@@ -196,16 +205,16 @@ class TransactionApiTests(BaseRazao):
         self.assertEqual(custeio["orcamento"], "6500.00")
         self.assertEqual(custeio["gasto"], "5000.00")
         self.assertEqual(custeio["saldo"], "1500.00")
-        self.assertEqual(custeio["empenhado"], "5050.00")
-        self.assertEqual(custeio["gastos_previstos"], "200.00")
-        self.assertEqual(custeio["saldo_projetado"], "1250.00")
+        self.assertEqual(custeio["empenhado"], "5100.00")
+        self.assertEqual(custeio["gastos_previstos"], "5000.00")
+        self.assertEqual(custeio["saldo_projetado"], "-3500.00")
         self.assertEqual(
             Decimal(custeio["saldo_projetado"]),
             Decimal(custeio["orcamento"])
-            - Decimal(custeio["empenhado"])
+            - Decimal(custeio["gasto"])
             - Decimal(custeio["gastos_previstos"]),
         )
-        self.assertEqual(custeio["nao_empenhado"], "1450.00")
+        self.assertEqual(custeio["nao_empenhado"], "1400.00")
 
     def test_center_metrics_count_fiscal_year_transport(self):
         self.creditar(100)
