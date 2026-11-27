@@ -181,6 +181,33 @@ class TestBolsas(BaseRazao):
         with self.assertRaises(RegraDeNegocio):
             services.pagar_lista(lista, self.usuario, "outra")
 
+    def test_pagar_lista_atualiza_empenhado_agregado_liquido(self):
+        services.reforcar_empenho(self.e1, 700, self.usuario)
+        p = services.gerar_parcelas(self.vinculo)[0]
+        services.alocar_parcela(p, self.e1)
+        lista = services.criar_lista(self.centro, p.competencia)
+        services.incluir_parcelas(lista, [p])
+
+        self.assertEqual(
+            saldos.empenhado_centro(self.centro, 2026, self.custeio), D("1000")
+        )
+        self.assertGreaterEqual(self.e1.saldo, p.valor)
+        self.assertGreaterEqual(
+            saldos.saldo_unidade(self.A, 2026, self.custeio), p.valor
+        )
+
+        services.pagar_lista(lista, self.usuario, "2026LS000124")
+
+        self.assertEqual(self.e1.saldo, D("900"))
+        self.assertEqual(saldos.total_centro(self.centro, 2026, self.custeio), D("900"))
+        self.assertEqual(
+            saldos.empenhado_centro(self.centro, 2026, self.custeio), D("1000")
+        )
+        self.assertEqual(
+            saldos.saldo_empenhado_centro(self.centro, 2026, self.custeio), D("900")
+        )
+        self.assertEqual(saldos.saldo_unidade(self.A, 2026, self.custeio), D("500"))
+
     def test_lista_completada_com_outro_empenho_no_fim_do_ano(self):
         monitoria = Finalidade.objects.create(
             nome="Bolsa Monitoria", natureza=self.custeio

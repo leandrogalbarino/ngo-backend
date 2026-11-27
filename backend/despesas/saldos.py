@@ -11,7 +11,10 @@ Termos
 * **alocado** de uma unidade: parcelas de bolsa ALOCADAS e ainda não pagas;
 * **disponível** de uma unidade: saldo - alocado;
 * **total** do centro: soma das linhas que alteram o total (créditos, pagamentos...);
-* **livre** (não empenhado): total - soma das linhas com empenho;
+* **empenhado**: saldo atual dos empenhos mais o que já foi gasto por eles;
+* **saldo empenhado**: valor ainda disponível nos empenhos;
+* **gastos previstos**: parcelas de bolsa previstas ou alocadas, ainda não pagas;
+* **livre** (não empenhado): total atual - saldo empenhado;
 * **do centro** (não distribuído): total - soma das linhas com unidade.
 """
 
@@ -183,17 +186,42 @@ def gasto_centro(centro, ano_fiscal, natureza) -> Decimal:
     return gastos_contabilizados + conversao_saida + transporte_saida
 
 
-def empenhado_centro(centro, ano_fiscal, natureza) -> Decimal:
-    """Soma dos saldos de todos os empenhos do centro naquele ano e natureza que são reforços."""
+def saldo_empenhado_centro(centro, ano_fiscal, natureza) -> Decimal:
+    """Valor ainda disponível nos empenhos do centro naquele ano e natureza."""
     return _soma(
         Lancamento.objects.filter(
             centro=centro,
-            transacao__operacao=Transacao.Operacao.REFORCO,
             ano_fiscal=ano_fiscal,
             natureza=natureza,
             empenho__isnull=False,
         )
     )
+
+
+def gastos_previstos_centro(centro, ano_fiscal, natureza) -> Decimal:
+    """Obrigações futuras ainda não pagas, incluindo parcelas previstas e alocadas."""
+    return _soma(
+        ParcelaBolsa.objects.filter(
+            vinculo__unidade__centro=centro,
+            vinculo__finalidade__natureza=natureza,
+            ano_fiscal=ano_fiscal,
+            status__in=[ParcelaBolsa.Status.PREVISTA, ParcelaBolsa.Status.ALOCADA],
+        ),
+        campo="valor",
+    )
+
+
+def empenhado_centro(centro, ano_fiscal, natureza) -> Decimal:
+    """Total empenhado, incluindo o que já foi gasto e excluindo anulações."""
+    empenhos = Lancamento.objects.filter(
+        centro=centro,
+        ano_fiscal=ano_fiscal,
+        natureza=natureza,
+        empenho__isnull=False,
+    )
+    saldo_atual = _soma(empenhos)
+    gasto = -_soma(empenhos.filter(tipo_movimento__conta_como_gasto=True))
+    return saldo_atual + gasto
 
 
 def distribuido_centro(centro, ano_fiscal, natureza) -> Decimal:
@@ -225,7 +253,7 @@ def distribuido_unidades_centro(centro, ano_fiscal, natureza) -> Decimal:
 
 def livre_centro(centro, ano_fiscal, natureza) -> Decimal:
     """Recurso do centro que ainda não foi empenhado."""
-    return total_centro(centro, ano_fiscal, natureza) - empenhado_centro(
+    return total_centro(centro, ano_fiscal, natureza) - saldo_empenhado_centro(
         centro, ano_fiscal, natureza
     )
 

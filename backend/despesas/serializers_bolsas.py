@@ -118,8 +118,9 @@ class ParcelaListaSIAFISerializer(serializers.ModelSerializer):
 
 
 class ListaSIAFIReadSerializer(serializers.ModelSerializer):
-    centro = serializers.IntegerField(source="centro_id", read_only=True)
-    transacao = serializers.IntegerField(source="transacao_id", read_only=True)
+    id_centro = serializers.IntegerField(source="centro_id", read_only=True)
+    centro = serializers.StringRelatedField(read_only=True)
+    id_transacao = serializers.IntegerField(source="transacao_id", read_only=True)
     total = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
     parcelas = ParcelaListaSIAFISerializer(many=True, read_only=True)
 
@@ -127,12 +128,13 @@ class ListaSIAFIReadSerializer(serializers.ModelSerializer):
         model = ListaSIAFI
         fields = [
             "id_lista_siafi",
+            "id_centro",
             "centro",
             "competencia",
             "ano_fiscal",
             "numero_siafi",
             "status",
-            "transacao",
+            "id_transacao",
             "criada_em",
             "total",
             "parcelas",
@@ -141,7 +143,7 @@ class ListaSIAFIReadSerializer(serializers.ModelSerializer):
 
 
 class ListaSIAFICreateSerializer(serializers.Serializer):
-    centro = serializers.PrimaryKeyRelatedField(queryset=Centro.objects.all())
+    id_centro = serializers.PrimaryKeyRelatedField(queryset=Centro.objects.all(), source="centro")
     competencia = serializers.DateField()
 
     def create(self, validated_data):

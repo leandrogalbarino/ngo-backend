@@ -135,10 +135,15 @@ class TransactionApiTests(BaseRazao):
 
         custeio = by_natureza[self.custeio.pk]
         self.assertEqual(custeio["orcamento"], "300.00")
-        self.assertEqual(custeio["gasto"], "170.00")
-        self.assertEqual(custeio["empenhado"], "80.00")
-        self.assertEqual(custeio["saldo"], "130.00")
-        self.assertEqual(custeio["saldo_projetado"], "50.00")
+        self.assertEqual(custeio["gasto"], "70.00")
+        self.assertEqual(custeio["empenhado"], "130.00")
+        self.assertEqual(custeio["saldo"], "230.00")
+        self.assertEqual(custeio["saldo_projetado"], "170.00")
+        self.assertEqual(custeio["nao_empenhado"], "150.00")
+        self.assertEqual(
+            Decimal(custeio["saldo_projetado"]),
+            Decimal(custeio["orcamento"]) - Decimal(custeio["empenhado"]),
+        )
         self.assertEqual(custeio["distribuido_unidades"], "100.00")
         self.assertEqual(custeio["nao_distribuido_unidades"], "200.00")
         self.assertEqual(
@@ -158,6 +163,49 @@ class TransactionApiTests(BaseRazao):
         self.assertEqual(capital["saldo_projetado"], "0.00")
         self.assertEqual(capital["distribuido_unidades"], "0.00")
         self.assertEqual(capital["nao_distribuido_unidades"], "20.00")
+
+    def test_saldo_projetado_excludes_unpaid_scholarship_commitments(self):
+        self.creditar(6500)
+        empenho = self.novo_empenho("001", self.bolsa2a)
+        services.reforcar_empenho(empenho, 5050, self.usuario)
+        self.distribuir(self.A, 5100)
+        services.registrar_despesa(empenho, self.A, self.bolsa2a, 5000, self.usuario)
+        vinculo = VinculoBolsa.objects.create(
+            bolsista=self.bolsista(),
+            unidade=self.A,
+            finalidade=self.bolsa2a,
+            valor_mensal=Decimal("100"),
+            inicio=dt.date(2026, 7, 1),
+            fim=dt.date(2026, 8, 1),
+        )
+        parcela_alocada, parcela_prevista = services.gerar_parcelas(vinculo)
+        services.alocar_parcela(parcela_alocada, empenho)
+
+        response = self.api.get(
+            reverse("despesas:centros-list"),
+            {"ano_fiscal": 2026},
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        center_rows = response.data["data"] if isinstance(response.data, dict) else response.data
+        custeio = next(
+            saldo
+            for saldo in center_rows[0]["saldos"]
+            if saldo["id_natureza"] == self.custeio.pk
+        )
+        self.assertEqual(custeio["orcamento"], "6500.00")
+        self.assertEqual(custeio["gasto"], "5000.00")
+        self.assertEqual(custeio["saldo"], "1500.00")
+        self.assertEqual(custeio["empenhado"], "5050.00")
+        self.assertEqual(custeio["gastos_previstos"], "200.00")
+        self.assertEqual(custeio["saldo_projetado"], "1250.00")
+        self.assertEqual(
+            Decimal(custeio["saldo_projetado"]),
+            Decimal(custeio["orcamento"])
+            - Decimal(custeio["empenhado"])
+            - Decimal(custeio["gastos_previstos"]),
+        )
+        self.assertEqual(custeio["nao_empenhado"], "1450.00")
 
     def test_center_metrics_count_fiscal_year_transport(self):
         self.creditar(100)

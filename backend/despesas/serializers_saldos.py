@@ -26,6 +26,8 @@ class CentroSaldoSerializer(serializers.Serializer):
     orcamento = serializers.DecimalField(max_digits=15, decimal_places=2)
     gasto = serializers.DecimalField(max_digits=15, decimal_places=2)
     empenhado = serializers.DecimalField(max_digits=15, decimal_places=2)
+    gastos_previstos = serializers.DecimalField(max_digits=15, decimal_places=2)
+    nao_empenhado = serializers.DecimalField(max_digits=15, decimal_places=2)
     saldo = serializers.DecimalField(max_digits=15, decimal_places=2)
     saldo_projetado = serializers.DecimalField(max_digits=15, decimal_places=2)
     distribuido_unidades = serializers.DecimalField(max_digits=15, decimal_places=2)
@@ -93,6 +95,9 @@ def _saldos_centro(centro: Centro, ano_fiscal: int):
         gasto = saldos.gasto_centro(centro.pk, ano_fiscal, natureza.pk)
 
         empenhado = saldos.empenhado_centro(centro.pk, ano_fiscal, natureza.pk)
+        gastos_previstos = saldos.gastos_previstos_centro(
+            centro.pk, ano_fiscal, natureza.pk
+        )
 
         distribuido = saldos.distribuido_unidades_centro(
             centro.pk, ano_fiscal, natureza.pk
@@ -104,9 +109,12 @@ def _saldos_centro(centro: Centro, ano_fiscal: int):
                 "orcamento": _valor(orcamento),
                 "gasto": _valor(gasto),
                 "saldo": _valor(orcamento - gasto),
-                "saldo_projetado": _valor(orcamento - gasto - empenhado),
+                "saldo_projetado": _valor(orcamento - empenhado - gastos_previstos),
                 "empenhado": _valor(empenhado),
-                "nao_empenhado": _valor(orcamento - empenhado),
+                "gastos_previstos": _valor(gastos_previstos),
+                "nao_empenhado": _valor(
+                    saldos.livre_centro(centro.pk, ano_fiscal, natureza.pk)
+                ),
                 "distribuido_unidades": _valor(distribuido),
                 "nao_distribuido_unidades": _valor(orcamento - distribuido),
             }

@@ -254,7 +254,7 @@ def _verificar_invariantes(lancamentos: Sequence[Lancamento]) -> None:
             raise SaldoInsuficiente(
                 f"O centro ficaria com recurso negativo {contexto}."
             )
-        if saldos.empenhado_centro(centro_id, ano, natureza_id) > total:
+        if saldos.saldo_empenhado_centro(centro_id, ano, natureza_id) > total:
             raise SaldoInsuficiente(
                 f"Não há recurso livre suficiente para empenhar {contexto}."
             )
